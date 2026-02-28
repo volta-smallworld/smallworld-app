@@ -7,6 +7,7 @@ import TerrainResultPanel from "@/components/terrain-result-panel";
 import SceneList from "@/components/scene-list";
 import ViewpointGallery from "@/components/viewpoint-gallery";
 import { analyzeTerrain, findViewpoints } from "@/lib/api";
+import { fetchStyleCapabilities, uploadStyleReference, findStyleViewpoints } from "@/lib/style-api";
 import { fetchPreviewCapabilities, fetchViewpointPreview } from "@/lib/previews";
 import {
   LatLng,
@@ -21,6 +22,11 @@ import {
   PreviewCapability,
   ViewpointPreviewState,
   RankedViewpoint,
+  StyleFetchState,
+  StyleReferenceCapability,
+  StyleReferenceUploadResponse,
+  StyleViewpointSearchResponse,
+  StyleVerificationResult,
 } from "@/types/terrain";
 
 const CesiumMap = dynamic(() => import("@/components/cesium-map"), {
@@ -68,6 +74,14 @@ export default function Home() {
   const [previewCapability, setPreviewCapability] = useState<PreviewCapability | null>(null);
   const [previewStates, setPreviewStates] = useState<Record<string, ViewpointPreviewState>>({});
   const previewGenerationRef = useRef(0);
+  // Style reference state
+  const [styleCapability, setStyleCapability] = useState<StyleReferenceCapability | null>(null);
+  const [styleReference, setStyleReference] = useState<StyleReferenceUploadResponse | null>(null);
+  const [styleUploadState, setStyleUploadState] = useState<StyleFetchState>("idle");
+  const [styleFetchState, setStyleFetchState] = useState<StyleFetchState>("idle");
+  const [styleViewpointResult, setStyleViewpointResult] = useState<StyleViewpointSearchResponse | null>(null);
+  const [styleError, setStyleError] = useState<string | null>(null);
+  const [styleVerifications, setStyleVerifications] = useState<Record<string, StyleVerificationResult>>({});
   const previewControllersRef = useRef<Record<string, AbortController>>({});
 
   const handleSelectCenter = useCallback((latlng: LatLng) => {
@@ -230,25 +244,117 @@ export default function Home() {
       setSelectedViewpointId((prev) => (prev === id ? null : id));
 
       // Trigger on-demand preview if needed
-      if (previewCapability?.enabled && viewpointResult) {
-        const vp = viewpointResult.viewpoints.find((v) => v.id === id);
+      if (previewCapability?.enabled) {
+        const vp = id.startsWith("style-")
+          ? styleViewpointResult?.viewpoints.find((v) => `style-${v.id}` === id)
+          : viewpointResult?.viewpoints.find((v) => v.id === id);
         const currentState = previewStates[id];
         if (vp && (!currentState || currentState.status === "idle")) {
-          renderPreview(vp, previewGenerationRef.current);
+          const previewVp: RankedViewpoint = id.startsWith("style-")
+            ? {
+                id,
+                sceneId: vp.sceneId,
+                sceneType: vp.sceneType,
+                composition: vp.composition,
+                camera: vp.camera,
+                targets: vp.targets,
+                distanceMetersApprox: vp.distanceMetersApprox,
+                score: vp.score,
+                scoreBreakdown: vp.scoreBreakdown,
+                validation: vp.validation,
+              }
+            : vp;
+          renderPreview(previewVp, previewGenerationRef.current);
         }
       }
     },
-    [previewCapability, viewpointResult, previewStates, renderPreview],
+    [previewCapability, viewpointResult, styleViewpointResult, previewStates, renderPreview],
   );
 
   const handleRetryPreview = useCallback(
     (id: string) => {
-      if (!viewpointResult) return;
-      const vp = viewpointResult.viewpoints.find((v) => v.id === id);
-      if (vp) renderPreview(vp, previewGenerationRef.current);
+      const vp = id.startsWith("style-")
+        ? styleViewpointResult?.viewpoints.find((v) => `style-${v.id}` === id)
+        : viewpointResult?.viewpoints.find((v) => v.id === id);
+      if (!vp) return;
+
+      const previewVp: RankedViewpoint = id.startsWith("style-")
+        ? {
+            id,
+            sceneId: vp.sceneId,
+            sceneType: vp.sceneType,
+            composition: vp.composition,
+            camera: vp.camera,
+            targets: vp.targets,
+            distanceMetersApprox: vp.distanceMetersApprox,
+            score: vp.score,
+            scoreBreakdown: vp.scoreBreakdown,
+            validation: vp.validation,
+          }
+        : vp;
+
+      renderPreview(previewVp, previewGenerationRef.current);
     },
-    [viewpointResult, renderPreview],
+    [viewpointResult, styleViewpointResult, renderPreview],
   );
+
+  const handleUploadStyleReference = useCallback(async (file: File) => {
+    setStyleUploadState("loading");
+    try {
+      const ref = await uploadStyleReference(file);
+      setStyleReference(ref);
+      setStyleUploadState("success");
+    } catch {
+      setStyleUploadState("error");
+    }
+  }, []);
+
+  const handleFindStyledViewpoints = useCallback(async () => {
+    if (!center || fetchState !== "success" || !styleReference) return;
+
+    setStyleFetchState("loading");
+    setStyleError(null);
+    setStyleViewpointResult(null);
+    setStyleVerifications({});
+
+    try {
+      const data = await findStyleViewpoints({
+        center,
+        radiusMeters,
+        weights,
+        compositions: selectedCompositions,
+        referenceId: styleReference.referenceId,
+      });
+
+      setStyleViewpointResult(data);
+      setStyleFetchState("success");
+
+      // Eager preview + verification for top N
+      const eagerCount = parseInt(process.env.NEXT_PUBLIC_STYLE_VERIFY_EAGER_COUNT || "3", 10);
+      const eagerVps = data.viewpoints.slice(0, eagerCount);
+
+      for (const vp of eagerVps) {
+        renderPreview(
+          {
+            id: `style-${vp.id}`,
+            sceneId: vp.sceneId,
+            sceneType: vp.sceneType,
+            composition: vp.composition,
+            camera: vp.camera,
+            targets: vp.targets,
+            distanceMetersApprox: vp.distanceMetersApprox,
+            score: vp.score,
+            scoreBreakdown: vp.scoreBreakdown,
+            validation: vp.validation,
+          } as RankedViewpoint,
+          previewGenerationRef.current,
+        );
+      }
+    } catch (err) {
+      setStyleError(err instanceof Error ? err.message : "Unknown error");
+      setStyleFetchState("error");
+    }
+  }, [center, radiusMeters, weights, selectedCompositions, fetchState, styleReference, renderPreview]);
 
   // Initialize unsupported states when capability is disabled
   useEffect(() => {
@@ -269,6 +375,22 @@ export default function Home() {
   useEffect(() => {
     return () => cleanupPreviews();
   }, [cleanupPreviews]);
+
+  // Fetch style capabilities on mount
+  useEffect(() => {
+    fetchStyleCapabilities()
+      .then(setStyleCapability)
+      .catch(() =>
+        setStyleCapability({
+          enabled: false,
+          hedLoaded: false,
+          clipLoaded: false,
+          lpipsLoaded: false,
+          maxUploadBytes: 0,
+          message: "Failed to check style capabilities",
+        }),
+      );
+  }, []);
 
   return (
     <div style={{ display: "flex", height: "100vh", width: "100vw" }}>
@@ -297,6 +419,12 @@ export default function Home() {
           onCompositionsChange={setSelectedCompositions}
           onFindViewpoints={handleFindViewpoints}
           viewpointFetchState={viewpointFetchState}
+          styleCapability={styleCapability}
+          styleReference={styleReference}
+          styleUploadState={styleUploadState}
+          onUploadStyleReference={handleUploadStyleReference}
+          onFindStyledViewpoints={handleFindStyledViewpoints}
+          styleFetchState={styleFetchState}
         />
         <div style={{ borderTop: "1px solid #333" }}>
           <TerrainResultPanel
@@ -326,6 +454,38 @@ export default function Home() {
         {viewpointFetchState === "error" && viewpointError && (
           <div style={{ padding: 16, color: "#ef4444", fontSize: 13 }}>
             Viewpoint error: {viewpointError}
+          </div>
+        )}
+        {styleFetchState === "success" &&
+          styleViewpointResult &&
+          styleViewpointResult.viewpoints.length > 0 && (
+          <div style={{ borderTop: "1px solid #333" }}>
+            <ViewpointGallery
+              viewpoints={styleViewpointResult.viewpoints.map((vp) => ({
+                id: `style-${vp.id}`,
+                sceneId: vp.sceneId,
+                sceneType: vp.sceneType,
+                composition: vp.composition,
+                camera: vp.camera,
+                targets: vp.targets,
+                distanceMetersApprox: vp.distanceMetersApprox,
+                score: vp.score,
+                scoreBreakdown: vp.scoreBreakdown,
+                validation: vp.validation,
+              }))}
+              selectedId={selectedViewpointId}
+              onSelect={handleSelectViewpoint}
+              previewStates={previewStates}
+              onRetryPreview={handleRetryPreview}
+              isStyleMode={true}
+              styleViewpoints={styleViewpointResult.viewpoints}
+              styleVerifications={styleVerifications}
+            />
+          </div>
+        )}
+        {styleFetchState === "error" && styleError && (
+          <div style={{ padding: 16, color: "#ef4444", fontSize: 13 }}>
+            Style search error: {styleError}
           </div>
         )}
       </div>

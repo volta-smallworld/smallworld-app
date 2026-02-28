@@ -4,6 +4,8 @@ import {
   RankedViewpoint,
   ViewpointPreviewState,
   ViewpointPreviewStatus,
+  StyleRankedViewpoint,
+  StyleVerificationResult,
 } from "@/types/terrain";
 
 interface ViewpointGalleryProps {
@@ -12,6 +14,9 @@ interface ViewpointGalleryProps {
   onSelect: (id: string) => void;
   previewStates: Record<string, ViewpointPreviewState>;
   onRetryPreview: (id: string) => void;
+  isStyleMode?: boolean;
+  styleViewpoints?: StyleRankedViewpoint[];
+  styleVerifications?: Record<string, StyleVerificationResult>;
 }
 
 const COMP_COLORS: Record<string, string> = {
@@ -197,6 +202,9 @@ export default function ViewpointGallery({
   onSelect,
   previewStates,
   onRetryPreview,
+  isStyleMode = false,
+  styleViewpoints = [],
+  styleVerifications = {},
 }: ViewpointGalleryProps) {
   if (viewpoints.length === 0) return null;
 
@@ -216,7 +224,7 @@ export default function ViewpointGallery({
         }}
       >
         <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>
-          Viewpoints ({viewpoints.length})
+          {isStyleMode ? "Styled " : ""}Viewpoints ({viewpoints.length})
         </h3>
 
         {viewpoints.map((vp) => {
@@ -297,6 +305,69 @@ export default function ViewpointGallery({
                 <div style={{ fontSize: 11, color: "#777", marginBottom: 6 }}>
                   pitch {vp.camera.pitchDegrees.toFixed(1)}&deg;
                 </div>
+
+                {/* Style metadata */}
+                {isStyleMode && (() => {
+                  const styleVp = styleViewpoints.find((s) => `style-${s.id}` === vp.id);
+                  const verification = styleVerifications[vp.id];
+                  if (!styleVp) return null;
+                  return (
+                    <div
+                      style={{
+                        marginBottom: 6,
+                        padding: "4px 0",
+                        borderTop: "1px solid rgba(124,58,237,0.2)",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                        <span style={{ color: "#7c3aed" }}>Styled</span>
+                        <span
+                          style={{
+                            fontSize: 10,
+                            padding: "1px 6px",
+                            borderRadius: 3,
+                            backgroundColor:
+                              styleVp.style.verificationStatus === "verified"
+                                ? "rgba(34,197,94,0.2)"
+                                : styleVp.style.verificationStatus === "partial"
+                                  ? "rgba(234,179,8,0.2)"
+                                  : styleVp.style.verificationStatus === "failed"
+                                    ? "rgba(239,68,68,0.2)"
+                                    : "rgba(255,255,255,0.06)",
+                            color:
+                              styleVp.style.verificationStatus === "verified"
+                                ? "#22c55e"
+                                : styleVp.style.verificationStatus === "partial"
+                                  ? "#eab308"
+                                  : styleVp.style.verificationStatus === "failed"
+                                    ? "#ef4444"
+                                    : "#888",
+                          }}
+                        >
+                          {verification?.verificationStatus || styleVp.style.verificationStatus}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>
+                        patch: {styleVp.style.patchSimilarity.toFixed(3)} &middot;
+                        contour: {styleVp.style.contourRefinement.toFixed(3)}
+                      </div>
+                      <div style={{ fontSize: 11, color: "#666" }}>
+                        base: {styleVp.baseScore.toFixed(3)} &middot;
+                        style: {styleVp.style.preRenderScore.toFixed(3)}
+                      </div>
+                      {styleVp.style.matchedFeatureIds.length > 0 && (
+                        <div style={{ fontSize: 10, color: "#555", marginTop: 2 }}>
+                          features: {styleVp.style.matchedFeatureIds.length} matched
+                        </div>
+                      )}
+                      {verification && verification.finalStyleScore != null && (
+                        <div style={{ fontSize: 11, color: "#7c3aed", marginTop: 2, fontWeight: 600 }}>
+                          final: {verification.finalStyleScore.toFixed(3)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Top 3 score components */}
                 <div

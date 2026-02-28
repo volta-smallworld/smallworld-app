@@ -11,6 +11,12 @@ dependencies = [
     "scipy>=1.14",
     "pillow>=11.0",
     "pydantic-settings>=2.7",
+    "python-multipart>=0.0.9",
+    "opencv-python-headless>=4.9",
+    "torch>=2.2",
+    "open-clip-torch>=2.24",
+    "lpips>=0.1.4",
+    "scikit-image>=0.22",
 ]
 
 [tool.uv]

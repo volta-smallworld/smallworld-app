@@ -252,3 +252,129 @@ export interface ViewpointPreviewState {
   objectUrl: string | null;
   error: string | null;
 }
+
+// === Hour Five: Style Reference Types ===
+
+export type StyleFetchState = "idle" | "loading" | "success" | "error";
+
+export interface StyleReferenceCapability {
+  enabled: boolean;
+  hedLoaded: boolean;
+  clipLoaded: boolean;
+  lpipsLoaded: boolean;
+  maxUploadBytes: number;
+  message: string | null;
+}
+
+export interface FingerprintSummary {
+  dominantOrientationDegrees: number;
+  edgeDensity: number;
+  parallelism: number;
+  verticalCentroid: number;
+  featureScale: number;
+}
+
+export interface StyleReferenceUploadResponse {
+  referenceId: string;
+  label: string | null;
+  filename: string;
+  contentType: string;
+  width: number;
+  height: number;
+  fingerprintSummary: FingerprintSummary;
+  artifacts: {
+    edgeMapAvailable: boolean;
+  };
+}
+
+export interface StyleMetadata {
+  patchId: string;
+  matchedFeatureIds: string[];
+  geometrySimilarity: number;
+  patchSimilarity: number;
+  contourRefinement: number;
+  preRenderScore: number;
+  verificationStatus: "pending" | "verified" | "partial" | "failed";
+  clipSimilarity: number | null;
+  lpipsDistance: number | null;
+  edgeSimilarity: number | null;
+  finalStyleScore: number | null;
+}
+
+export interface StyleRankedViewpoint {
+  id: string;
+  sceneId: string;
+  sceneType: string;
+  composition: CompositionType;
+  camera: CameraPose;
+  targets: ViewpointTarget[];
+  distanceMetersApprox: number;
+  baseScore: number;
+  score: number;
+  scoreBreakdown: ViewpointScoreBreakdown;
+  validation: {
+    clearanceMeters: number;
+    visibleTargetIds: string[];
+  };
+  style: StyleMetadata;
+}
+
+export interface StyleViewpointSearchRequest {
+  center: LatLng;
+  radiusMeters: number;
+  weights?: AnalysisWeights;
+  compositions?: CompositionType[];
+  maxViewpoints?: number;
+  maxPerScene?: number;
+  referenceId: string;
+  topPatchCount?: number;
+}
+
+export interface StyleViewpointSearchSummary {
+  sceneCount: number;
+  eligibleSceneCount: number;
+  candidatesGenerated: number;
+  candidatesRejected: {
+    templateIneligible: number;
+    noConvergence: number;
+    underground: number;
+    occluded: number;
+    outOfBounds: number;
+  };
+  patchesScanned: number;
+  stylePatchMatches: number;
+  styleCandidatesRefined: number;
+  returned: number;
+}
+
+export interface StyleViewpointSearchResponse {
+  request: {
+    center: LatLng;
+    radiusMeters: number;
+    zoomUsed: number;
+    weights: AnalysisWeights;
+    compositions: CompositionType[];
+    maxViewpoints: number;
+    maxPerScene: number;
+    referenceId: string;
+    topPatchCount: number;
+  };
+  reference: {
+    referenceId: string;
+    label: string | null;
+  };
+  summary: StyleViewpointSearchSummary;
+  viewpoints: StyleRankedViewpoint[];
+  source: string;
+}
+
+export interface StyleVerificationResult {
+  referenceId: string;
+  viewpointId: string;
+  verificationStatus: "verified" | "partial" | "failed";
+  clipSimilarity: number | null;
+  lpipsDistance: number | null;
+  edgeSimilarity: number | null;
+  finalStyleScore: number | null;
+  warnings: string[];
+}

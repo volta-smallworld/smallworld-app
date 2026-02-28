@@ -7,6 +7,9 @@ import {
   TerrainFetchState,
   CompositionType,
   ViewpointFetchState,
+  StyleFetchState,
+  StyleReferenceCapability,
+  StyleReferenceUploadResponse,
 } from "@/types/terrain";
 
 const WEIGHT_KEYS: { key: keyof AnalysisWeights; label: string }[] = [
@@ -47,6 +50,13 @@ interface ControlPanelProps {
   onCompositionsChange: (compositions: CompositionType[]) => void;
   onFindViewpoints: () => void;
   viewpointFetchState: ViewpointFetchState;
+  // Style reference props
+  styleCapability: StyleReferenceCapability | null;
+  styleReference: StyleReferenceUploadResponse | null;
+  styleUploadState: StyleFetchState;
+  onUploadStyleReference: (file: File) => void;
+  onFindStyledViewpoints: () => void;
+  styleFetchState: StyleFetchState;
 }
 
 export default function ControlPanel({
@@ -63,6 +73,12 @@ export default function ControlPanel({
   onCompositionsChange,
   onFindViewpoints,
   viewpointFetchState,
+  styleCapability,
+  styleReference,
+  styleUploadState,
+  onUploadStyleReference,
+  onFindStyledViewpoints,
+  styleFetchState,
 }: ControlPanelProps) {
   const radiusKm = (radiusMeters / 1000).toFixed(1);
 
@@ -236,6 +252,123 @@ export default function ControlPanel({
       >
         {viewpointFetchState === "loading" ? "Finding Viewpoints..." : "Find Viewpoints"}
       </button>
+
+      {/* ── Style Reference ── */}
+      <div style={{ borderTop: "1px solid #333", paddingTop: 16 }}>
+        <div style={{ fontSize: 13, color: "#888", marginBottom: 6 }}>Style Reference</div>
+
+        {styleCapability && !styleCapability.enabled && (
+          <div style={{ fontSize: 12, color: "#666", marginBottom: 8 }}>
+            Style search unavailable: {styleCapability.message}
+          </div>
+        )}
+
+        <label
+          style={{
+            display: "block",
+            padding: "8px 12px",
+            fontSize: 13,
+            fontWeight: 500,
+            border: "1px dashed #555",
+            borderRadius: 6,
+            textAlign: "center",
+            cursor: styleUploadState === "loading" ? "not-allowed" : "pointer",
+            color: "#aaa",
+            marginBottom: 8,
+          }}
+        >
+          {styleUploadState === "loading"
+            ? "Uploading..."
+            : styleReference
+              ? "Replace Reference Image"
+              : "Upload Reference Image"}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            style={{ display: "none" }}
+            disabled={styleUploadState === "loading"}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onUploadStyleReference(file);
+              e.target.value = "";
+            }}
+          />
+        </label>
+
+        {styleReference && (
+          <div
+            style={{
+              marginBottom: 8,
+              borderRadius: 6,
+              border: "1px solid #444",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                width: "100%",
+                paddingBottom: "56.25%",
+                position: "relative",
+                backgroundColor: "#1a1a2e",
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#888",
+                  fontSize: 12,
+                }}
+              >
+                {styleReference.filename} ({styleReference.width}x{styleReference.height})
+              </div>
+            </div>
+            <div style={{ padding: "6px 8px", fontSize: 11, color: "#777" }}>
+              <div>Edge density: {styleReference.fingerprintSummary.edgeDensity.toFixed(3)}</div>
+              <div>Parallelism: {styleReference.fingerprintSummary.parallelism.toFixed(3)}</div>
+              <div>Orientation: {styleReference.fingerprintSummary.dominantOrientationDegrees.toFixed(1)}&deg;</div>
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={onFindStyledViewpoints}
+          disabled={
+            fetchState !== "success" ||
+            !styleReference ||
+            styleFetchState === "loading" ||
+            selectedCompositions.length === 0
+          }
+          style={{
+            padding: "10px 16px",
+            fontSize: 14,
+            fontWeight: 600,
+            width: "100%",
+            backgroundColor:
+              fetchState !== "success" ||
+              !styleReference ||
+              styleFetchState === "loading" ||
+              selectedCompositions.length === 0
+                ? "#444"
+                : "#7c3aed",
+            color: "#fff",
+            border: "none",
+            borderRadius: 6,
+            cursor:
+              fetchState !== "success" ||
+              !styleReference ||
+              styleFetchState === "loading" ||
+              selectedCompositions.length === 0
+                ? "not-allowed"
+                : "pointer",
+          }}
+        >
+          {styleFetchState === "loading" ? "Finding Styled Viewpoints..." : "Find Styled Viewpoints"}
+        </button>
+      </div>
     </div>
   );
 }

@@ -51,6 +51,21 @@ class Settings(BaseSettings):
     gemini_api_key: str = ""
     gemini_image_model: str = ""
 
+    # ── Style Reference ────────────────────────────────────────────────
+    style_artifacts_dir: str = ".style_artifacts"
+    style_reference_ttl_hours: int = 24
+    style_upload_max_bytes: int = 10485760
+    style_patch_window_cells: int = 21
+    style_patch_stride_cells: int = 8
+    style_top_patch_count: int = 24
+    style_refinement_iterations: int = 20
+    style_refinement_learning_rate: float = 0.15
+    style_clip_model_name: str = "ViT-B-32"
+    style_clip_pretrained: str = "laion2b_s34b_b79k"
+    style_lpips_backbone: str = "alex"
+    style_hed_prototxt_path: str = ""
+    style_hed_weights_path: str = ""
+
     model_config = {"env_file": ".env"}
 
 
