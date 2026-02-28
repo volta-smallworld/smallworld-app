@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint src/"
+    "lint": "eslint src/",
+    "render:preview": "node scripts/render-preview.mjs"
   },
   "dependencies": {
     "cesium": "^1.124.0",
@@ -24,6 +25,7 @@
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.1.0",
     "playwright": "^1.58.2",
+    "puppeteer": "^23.0.0",
     "typescript": "^5.7.0"
   }
 }
