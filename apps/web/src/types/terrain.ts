@@ -235,3 +235,20 @@ export interface ViewpointSearchResponse {
   viewpoints: RankedViewpoint[];
   source: string;
 }
+
+// === Hour Four: Preview Types ===
+
+export type ViewpointPreviewStatus = "idle" | "loading" | "ready" | "error" | "unsupported";
+
+export interface PreviewCapability {
+  enabled: boolean;
+  provider: "ionTerrain" | "none";
+  eagerCount: number;
+  message: string | null;
+}
+
+export interface ViewpointPreviewState {
+  status: ViewpointPreviewStatus;
+  objectUrl: string | null;
+  error: string | null;
+}

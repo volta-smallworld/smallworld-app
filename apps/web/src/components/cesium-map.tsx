@@ -6,16 +6,18 @@ import {
   Cartesian2,
   Cartesian3,
   Color,
-  EllipsoidTerrainProvider,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   Cartographic,
   Math as CesiumMath,
-  ImageryLayer,
   Entity,
 } from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
-import { initCesium, createOsmImageryProvider } from "@/lib/cesium";
+import {
+  initCesium,
+  createPrimaryTerrainProvider,
+  createPrimaryImageryProvider,
+} from "@/lib/cesium";
 import {
   LatLng,
   AnalysisOverlayKey,
@@ -54,44 +56,77 @@ export default function CesiumMap({
 
   useEffect(() => {
     if (!containerRef.current) return;
-    initCesium();
 
-    const viewer = new Viewer(containerRef.current, {
-      terrainProvider: new EllipsoidTerrainProvider(),
-      baseLayer: new ImageryLayer(createOsmImageryProvider()),
-      baseLayerPicker: false,
-      geocoder: false,
-      homeButton: false,
-      sceneModePicker: false,
-      navigationHelpButton: false,
-      animation: false,
-      timeline: false,
-      fullscreenButton: false,
-      infoBox: false,
-      selectionIndicator: false,
-      creditContainer: document.createElement("div"),
-    });
+    let destroyed = false;
+    let handler: ScreenSpaceEventHandler | null = null;
 
-    viewerRef.current = viewer;
+    async function setupViewer() {
+      initCesium();
 
-    const handler = new ScreenSpaceEventHandler(viewer.scene.canvas);
-    handler.setInputAction((event: { position: Cartesian2 }) => {
-      const cartesian = viewer.camera.pickEllipsoid(
-        event.position,
-        viewer.scene.globe.ellipsoid
-      );
-      if (!cartesian) return;
-      const carto = Cartographic.fromCartesian(cartesian);
-      onSelectCenterRef.current({
-        lat: CesiumMath.toDegrees(carto.latitude),
-        lng: CesiumMath.toDegrees(carto.longitude),
+      const terrainProvider = await createPrimaryTerrainProvider();
+      const imageryProvider = await createPrimaryImageryProvider();
+
+      if (destroyed || !containerRef.current) return;
+
+      const viewer = new Viewer(containerRef.current, {
+        terrainProvider: terrainProvider || undefined,
+        baseLayerPicker: false,
+        geocoder: false,
+        homeButton: false,
+        sceneModePicker: false,
+        navigationHelpButton: false,
+        animation: false,
+        timeline: false,
+        fullscreenButton: false,
+        infoBox: false,
+        selectionIndicator: false,
+        creditContainer: document.createElement("div"),
       });
-    }, ScreenSpaceEventType.LEFT_CLICK);
+
+      // Replace default imagery with the capability-aware provider
+      viewer.imageryLayers.removeAll();
+      viewer.imageryLayers.addImageryProvider(imageryProvider);
+
+      viewerRef.current = viewer;
+
+      handler = new ScreenSpaceEventHandler(viewer.scene.canvas);
+      handler.setInputAction((event: { position: Cartesian2 }) => {
+        const scene = viewer.scene;
+        let cartesian =
+          scene.pickPositionSupported ? scene.pickPosition(event.position) : undefined;
+
+        if (!cartesian) {
+          const ray = viewer.camera.getPickRay(event.position);
+          if (ray) {
+            cartesian = scene.globe.pick(ray, scene);
+          }
+        }
+
+        if (!cartesian) {
+          cartesian = viewer.camera.pickEllipsoid(
+            event.position,
+            scene.globe.ellipsoid
+          );
+        }
+
+        if (!cartesian) return;
+        const carto = Cartographic.fromCartesian(cartesian);
+        onSelectCenterRef.current({
+          lat: CesiumMath.toDegrees(carto.latitude),
+          lng: CesiumMath.toDegrees(carto.longitude),
+        });
+      }, ScreenSpaceEventType.LEFT_CLICK);
+    }
+
+    setupViewer();
 
     return () => {
-      handler.destroy();
-      viewer.destroy();
-      viewerRef.current = null;
+      destroyed = true;
+      if (handler) handler.destroy();
+      if (viewerRef.current) {
+        viewerRef.current.destroy();
+        viewerRef.current = null;
+      }
     };
   }, []);
 
@@ -293,6 +328,33 @@ export default function CesiumMap({
 
     viewpointEntitiesRef.current = newEntities;
   }, [viewpointResult, selectedViewpointId, overlays]);
+
+  // Fly camera to the selected viewpoint
+  useEffect(() => {
+    if (!viewerRef.current || !selectedViewpointId || !viewpointResult) return;
+
+    const vp = viewpointResult.viewpoints.find(
+      (v) => v.id === selectedViewpointId
+    );
+    if (!vp) return;
+
+    const viewer = viewerRef.current;
+    const { camera: cam } = vp;
+
+    viewer.camera.flyTo({
+      destination: Cartesian3.fromDegrees(
+        cam.lng,
+        cam.lat,
+        cam.altitudeMeters
+      ),
+      orientation: {
+        heading: CesiumMath.toRadians(cam.headingDegrees),
+        pitch: CesiumMath.toRadians(cam.pitchDegrees),
+        roll: CesiumMath.toRadians(cam.rollDegrees),
+      },
+      duration: 1.5,
+    });
+  }, [selectedViewpointId, viewpointResult]);
 
   return (
     <div
