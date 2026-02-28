@@ -13,7 +13,7 @@ const MapView = dynamic(() => import('@/components/MapView'), { ssr: false });
 type Tab = 'chat' | 'results' | 'filters';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<Tab>('chat');
+  const [activeTab, setActiveTab] = useState<Tab>('filters');
   const [viewpoints, setViewpoints] = useState<Viewpoint[]>([]);
   const [selectedViewpoint, setSelectedViewpoint] = useState<Viewpoint | null>(null);
   const [searchCenter, setSearchCenter] = useState<{ lat: number; lng: number } | null>(null);
