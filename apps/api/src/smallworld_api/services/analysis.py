@@ -18,6 +18,7 @@ DEFAULT_ANALYSIS_WEIGHTS = {
     "water": 0.7,
     "relief": 1.0,
 }
+EIGHT_CONNECTED = ndimage.generate_binary_structure(2, 2)
 
 
 def _normalize(arr: np.ndarray) -> np.ndarray:
@@ -138,23 +139,37 @@ def extract_hotspots(
     """Find top local maxima in the interest raster as hotspots with reason tags."""
     h, w = interest.shape
     local_max = ndimage.maximum_filter(interest, size=7)
-    is_hotspot = (interest == local_max) & (interest > 0.1)
-    coords = np.argwhere(is_hotspot)
-    if len(coords) == 0:
+    hotspot_mask = (interest == local_max) & (interest > 0.1)
+    labeled, n_labels = ndimage.label(hotspot_mask, structure=EIGHT_CONNECTED)
+    if n_labels == 0:
         return []
 
-    scores = np.array([interest[r, c] for r, c in coords])
-    order = np.argsort(-scores)[:max_count]
+    layer_names = [name for name in layer_contributions if weights.get(name, 0) > 0]
+    candidates: list[tuple[float, int, int]] = []
+    for label_id in range(1, n_labels + 1):
+        coords = np.argwhere(labeled == label_id)
+        if len(coords) == 0:
+            continue
 
-    layer_names = list(layer_contributions.keys())
+        component_scores = np.array([interest[r, c] for r, c in coords])
+        best_score = float(component_scores.max())
+        top_coords = coords[np.isclose(component_scores, best_score)]
+        centroid = coords.mean(axis=0)
+        distances = np.sum((top_coords - centroid) ** 2, axis=1)
+        best_r, best_c = top_coords[int(np.argmin(distances))]
+        candidates.append((best_score, int(best_r), int(best_c)))
+
+    candidates.sort(key=lambda item: -item[0])
+    candidates = candidates[:max_count]
 
     hotspots = []
-    for idx, i in enumerate(order):
-        r, c = coords[i]
-        # Determine top reasons
-        contribs = {name: float(layer_contributions[name][r, c]) for name in layer_names}
+    for idx, (score, r, c) in enumerate(candidates):
+        contribs = {
+            name: float(layer_contributions[name][r, c]) * weights.get(name, 0)
+            for name in layer_names
+        }
         reasons = sorted(contribs, key=lambda k: -contribs[k])[:3]
-        reasons = [r for r in reasons if contribs[r] > 0.05]
+        reasons = [reason for reason in reasons if contribs[reason] > 0.05]
 
         hotspots.append(
             {
@@ -167,7 +182,7 @@ def extract_hotspots(
                         bounds.west + (c / (w - 1)) * (bounds.east - bounds.west), 6
                     ),
                 },
-                "score": round(float(scores[i]), 2),
+                "score": round(score, 2),
                 "reasons": reasons,
             }
         )

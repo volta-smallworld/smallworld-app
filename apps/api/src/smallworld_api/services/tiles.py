@@ -1,6 +1,9 @@
 import math
 from dataclasses import dataclass
 
+# Web Mercator projection is only defined within these latitude bounds.
+_MERCATOR_MAX_LAT = 85.051129
+
 
 @dataclass
 class GeoBounds:
@@ -31,16 +34,26 @@ class TileRange:
 
 
 def center_radius_to_bounds(lat: float, lng: float, radius_m: float) -> GeoBounds:
-    """Convert a center point and radius in meters to geographic bounds."""
+    """Convert a center point and radius in meters to geographic bounds.
+
+    Bounds are clamped to Web Mercator limits (±85.051129° lat, ±180° lng) so
+    that all returned coordinates are valid slippy-map tile inputs.  Selections
+    near the poles use a conservative longitude spread computed at ±89° rather
+    than dividing by cos(±90°) ≈ 0.
+    """
     earth_radius = 6378137.0
     d_lat = math.degrees(radius_m / earth_radius)
-    d_lng = math.degrees(radius_m / (earth_radius * math.cos(math.radians(lat))))
-    return GeoBounds(
-        north=lat + d_lat,
-        south=lat - d_lat,
-        east=lng + d_lng,
-        west=lng - d_lng,
-    )
+    # Clamp the reference latitude used for the longitude spread so that
+    # cos(lat) never reaches 0 (which would produce infinite d_lng).
+    lat_for_lng = max(-89.0, min(89.0, lat))
+    d_lng = math.degrees(radius_m / (earth_radius * math.cos(math.radians(lat_for_lng))))
+    # Clamp in both directions so that a center beyond Mercator limits never
+    # inverts north/south (e.g. lat=90 makes south=89.99 > north=85.051).
+    north = max(min(lat + d_lat, _MERCATOR_MAX_LAT), -_MERCATOR_MAX_LAT)
+    south = min(max(lat - d_lat, -_MERCATOR_MAX_LAT), _MERCATOR_MAX_LAT)
+    east = min(lng + d_lng, 180.0)
+    west = max(lng - d_lng, -180.0)
+    return GeoBounds(north=north, south=south, east=east, west=west)
 
 
 def _lat_to_tile_y(lat: float, zoom: int) -> int:
@@ -56,11 +69,12 @@ def _lng_to_tile_x(lng: float, zoom: int) -> int:
 
 def bounds_to_tile_range(bounds: GeoBounds, zoom: int) -> TileRange:
     """Convert geographic bounds to a slippy-map tile range at the given zoom."""
-    x_min = _lng_to_tile_x(bounds.west, zoom)
-    x_max = _lng_to_tile_x(bounds.east, zoom)
+    max_idx = 2**zoom - 1
+    x_min = max(0, min(_lng_to_tile_x(bounds.west, zoom), max_idx))
+    x_max = max(0, min(_lng_to_tile_x(bounds.east, zoom), max_idx))
     # In slippy maps, lower latitudes have higher y values
-    y_min = _lat_to_tile_y(bounds.north, zoom)
-    y_max = _lat_to_tile_y(bounds.south, zoom)
+    y_min = max(0, min(_lat_to_tile_y(bounds.north, zoom), max_idx))
+    y_max = max(0, min(_lat_to_tile_y(bounds.south, zoom), max_idx))
     return TileRange(z=zoom, x_min=x_min, x_max=x_max, y_min=y_min, y_max=y_max)
 
 

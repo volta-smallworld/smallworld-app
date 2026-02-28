@@ -17,6 +17,7 @@ FLOW_MIN_ACCUMULATION_CELLS = 24
 MAX_FEATURES_PER_KIND = 25
 MAX_PATH_VERTICES = 24
 MIN_PATH_CELLS = 5
+EIGHT_CONNECTED = ndimage.generate_binary_structure(2, 2)
 
 # ── Coordinate helpers ───────────────────────────────────────────────────────
 
@@ -120,7 +121,7 @@ def _mask_to_paths(
     max_vertices: int = MAX_PATH_VERTICES,
 ) -> list[dict]:
     """Convert a boolean mask into a list of path features (one per component)."""
-    labeled, n_labels = ndimage.label(mask)
+    labeled, n_labels = ndimage.label(mask, structure=EIGHT_CONNECTED)
     grid_h, grid_w = mask.shape
     paths = []
     for label_id in range(1, n_labels + 1):
@@ -159,29 +160,42 @@ def extract_peaks(
     prominence = dem - local_min_11
 
     peak_mask = is_peak & (prominence >= min_prominence)
-    peak_coords = np.argwhere(peak_mask)
-    if len(peak_coords) == 0:
+    labeled, n_labels = ndimage.label(peak_mask, structure=EIGHT_CONNECTED)
+    if n_labels == 0:
         return []
 
-    # Score by prominence (normalized to 0-1 within result set)
-    proms = np.array([prominence[r, c] for r, c in peak_coords])
-    elevs = np.array([dem[r, c] for r, c in peak_coords])
-    max_prom = proms.max() if proms.max() > 0 else 1.0
-    scores = proms / max_prom
+    candidates: list[tuple[float, float, int, int]] = []
+    for label_id in range(1, n_labels + 1):
+        coords = np.argwhere(labeled == label_id)
+        if len(coords) == 0:
+            continue
 
-    # Sort descending by prominence, cap
-    order = np.argsort(-proms)[:max_count]
+        component_proms = np.array([prominence[r, c] for r, c in coords])
+        component_elevs = np.array([dem[r, c] for r, c in coords])
+        best_prom = float(component_proms.max())
+        best_elev = float(component_elevs.max())
+
+        top_coords = coords[
+            np.isclose(component_proms, best_prom) & np.isclose(component_elevs, best_elev)
+        ]
+        centroid = coords.mean(axis=0)
+        distances = np.sum((top_coords - centroid) ** 2, axis=1)
+        best_r, best_c = top_coords[int(np.argmin(distances))]
+        candidates.append((best_prom, best_elev, int(best_r), int(best_c)))
+
+    candidates.sort(key=lambda item: (-item[0], -item[1]))
+    candidates = candidates[:max_count]
+    max_prom = max((candidate[0] for candidate in candidates), default=1.0) or 1.0
 
     peaks = []
-    for idx, i in enumerate(order):
-        r, c = peak_coords[i]
+    for idx, (prom, elev, r, c) in enumerate(candidates):
         peaks.append(
             {
                 "id": f"peak-{idx + 1}",
                 "center": _grid_to_latlng(r, c, bounds, h, w),
-                "elevationMeters": round(float(elevs[i]), 1),
-                "prominenceMetersApprox": round(float(proms[i]), 1),
-                "score": round(float(scores[i]), 2),
+                "elevationMeters": round(elev, 1),
+                "prominenceMetersApprox": round(prom, 1),
+                "score": round(prom / max_prom, 2),
             }
         )
     return peaks

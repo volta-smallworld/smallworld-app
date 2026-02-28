@@ -4,7 +4,7 @@ let initialized = false;
 
 export function initCesium() {
   if (initialized) return;
-  (window as any).CESIUM_BASE_URL = "/cesium/";
+  (window as Window & { CESIUM_BASE_URL: string }).CESIUM_BASE_URL = "/cesium/";
   Ion.defaultAccessToken = "";
   initialized = true;
 }

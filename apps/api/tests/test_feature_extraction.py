@@ -5,6 +5,7 @@ from smallworld_api.services.derivatives import (
     compute_slope_degrees,
 )
 from smallworld_api.services.features import (
+    _mask_to_paths,
     extract_cliffs,
     extract_peaks,
     extract_ridges,
@@ -74,3 +75,25 @@ def test_step_produces_cliff():
     cliffs = extract_cliffs(slope, curv, BOUNDS, dem, min_slope=5)
     assert len(cliffs) >= 1
     assert cliffs[0]["dropMetersApprox"] > 0
+
+
+def test_diagonal_mask_traces_single_path():
+    mask = np.zeros((16, 16), dtype=bool)
+    for idx in range(6):
+        mask[idx + 2, idx + 2] = True
+
+    paths = _mask_to_paths(mask, BOUNDS, np.zeros((16, 16)), CELL_SIZE, min_cells=1)
+
+    assert len(paths) == 1
+    assert len(paths[0]["path"]) == 6
+    assert paths[0]["lengthMetersApprox"] > 0
+
+
+def test_flat_topped_summit_collapses_to_single_peak():
+    dem = np.full((128, 128), 1000.0)
+    dem[50:60, 50:60] = 2000.0
+
+    peaks = extract_peaks(dem, BOUNDS, min_prominence=50)
+
+    assert len(peaks) == 1
+    assert peaks[0]["elevationMeters"] == 2000.0
