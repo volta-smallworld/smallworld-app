@@ -1,9 +1,5 @@
-// Proxy path for quick requests (chat, export)
-const API_BASE = '/api';
-
-// Direct backend URL for long-running requests (analyze)
-// Next.js proxy times out after ~30s, so we hit the backend directly
-const BACKEND_URL = 'http://localhost:8000';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+const API_BASE = `${BACKEND_URL}/api`;
 
 export interface Viewpoint {
   rank: number;
@@ -67,7 +63,7 @@ export async function analyze(req: AnalyzeRequest): Promise<AnalyzeResponse> {
   const timeout = setTimeout(() => controller.abort(), 300_000); // 5 min timeout
 
   try {
-    const res = await fetch(`${BACKEND_URL}/api/analyze`, {
+    const res = await fetch(`${API_BASE}/analyze`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req),

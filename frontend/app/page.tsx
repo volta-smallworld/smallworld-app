@@ -20,10 +20,10 @@ export default function Home() {
   const [searchRadius, setSearchRadius] = useState(10);
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<'ground' | 'drone'>('ground');
-  const [featureWeights, setFeatureWeights] = useState({
+  const [featureWeights, setFeatureWeights] = useState<Record<string, number>>({
     peaks: 0.7, ridges: 0.5, cliffs: 0.6, water: 0.6, relief: 0.5,
   });
-  const [beautyWeights, setBeautyWeights] = useState({
+  const [beautyWeights, setBeautyWeights] = useState<Record<string, number>>({
     viewshed_richness: 0.20, viewpoint_entropy: 0.15, skyline_fractal: 0.20,
     prospect_refuge: 0.15, depth_layering: 0.10, mystery: 0.10, water_visibility: 0.10,
   });

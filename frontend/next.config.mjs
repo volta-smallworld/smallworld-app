@@ -1,18 +1,4 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  // Proxy API requests to FastAPI backend
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: 'http://localhost:8000/api/:path*',
-      },
-      {
-        source: '/static/:path*',
-        destination: 'http://localhost:8000/static/:path*',
-      },
-    ];
-  },
-};
+const nextConfig = {};
 
 export default nextConfig;
