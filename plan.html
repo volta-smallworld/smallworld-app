@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>smallworld — Hackathon Plan</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --stone: #2c2a25;
+    --bark: #3d3830;
+    --sand: #f5f0e8;
+    --cream: #faf7f2;
+    --moss: #5a6e52;
+    --moss-light: #7a9470;
+    --river: #4a7080;
+    --river-light: #6a98a8;
+    --clay: #9e7c5a;
+    --clay-light: #c4a882;
+    --dusk: #8a6e7a;
+    --fog: #d8d2c8;
+    --faint: #e8e2d8;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html {
+    font-size: 17px;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: 'EB Garamond', Georgia, 'Times New Roman', serif;
+    background: var(--cream);
+    color: var(--stone);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* --- Top banner --- */
+  .hero {
+    background: var(--stone);
+    color: var(--sand);
+    padding: 0;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .hero-content {
+    position: relative;
+    z-index: 2;
+    padding: 2.5rem 2rem 0.5rem;
+  }
+
+  .hero-terrain {
+    position: relative;
+    width: 100%;
+    height: auto;
+    display: block;
+    margin-top: auto;
+  }
+
+  .hero-terrain svg {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .hero h1 {
+    font-size: 3rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.3rem;
+    position: relative;
+  }
+
+  .hero .subtitle {
+    font-style: italic;
+    font-size: 1.15rem;
+    opacity: 0.8;
+    max-width: 38em;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  .hero .tag {
+    display: inline-block;
+    margin-top: 1.2rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.15);
+    padding: 0.35em 1em;
+    border-radius: 2px;
+    position: relative;
+  }
+
+  /* --- Layout --- */
+  .container {
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2.5rem 2rem 5rem;
+  }
+
+  /* --- Section headings --- */
+  h2 {
+    font-size: 1.8rem;
+    font-weight: 500;
+    margin: 3rem 0 0.6rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1.5px solid var(--fog);
+    color: var(--bark);
+  }
+
+  h2:first-of-type { margin-top: 0; }
+
+  h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 2rem 0 0.4rem;
+    color: var(--moss);
+  }
+
+  h4 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 1.4rem 0 0.3rem;
+    color: var(--river);
+  }
+
+  /* --- Prose --- */
+  p, li { margin-bottom: 0.6rem; }
+
+  ul, ol {
+    padding-left: 1.4rem;
+    margin-bottom: 1rem;
+  }
+
+  li::marker { color: var(--clay); }
+
+  strong { font-weight: 600; color: var(--bark); }
+
+  em { font-style: italic; }
+
+  a {
+    color: var(--river);
+    text-decoration: underline;
+    text-decoration-color: var(--river-light);
+    text-underline-offset: 2px;
+    transition: color 0.2s;
+  }
+  a:hover { color: var(--moss); }
+
+  /* --- Blockquote --- */
+  blockquote {
+    border-left: 3px solid var(--clay-light);
+    margin: 1.5rem 0;
+    padding: 0.8rem 1.2rem;
+    background: var(--sand);
+    border-radius: 0 4px 4px 0;
+    font-style: italic;
+    color: var(--bark);
+  }
+
+  /* --- Code --- */
+  code {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 0.78rem;
+    background: var(--sand);
+    border: 1px solid var(--faint);
+    padding: 0.12em 0.35em;
+    border-radius: 3px;
+    color: var(--bark);
+  }
+
+  pre {
+    background: var(--bark);
+    color: #d4cfc6;
+    padding: 1.2rem 1.4rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 1rem 0 1.5rem;
+    line-height: 1.55;
+    border: 1px solid rgba(0,0,0,0.15);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+
+  pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.75rem;
+    color: inherit;
+  }
+
+  /* syntax colours in pre */
+  .kw { color: #a0b89e; }
+  .cm { color: #7a7568; font-style: italic; }
+  .st { color: #c4a882; }
+  .nb { color: #8ab8c8; }
+
+  /* --- Tables --- */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0 1.5rem;
+    font-size: 0.92rem;
+  }
+
+  thead th {
+    text-align: left;
+    padding: 0.55rem 0.8rem;
+    border-bottom: 2px solid var(--fog);
+    font-weight: 600;
+    color: var(--moss);
+    font-size: 0.82rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  tbody td {
+    padding: 0.5rem 0.8rem;
+    border-bottom: 1px solid var(--faint);
+    vertical-align: top;
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--sand); }
+
+  /* --- Funnel visualisation --- */
+  .funnel {
+    background: var(--sand);
+    border: 1px solid var(--faint);
+    border-radius: 8px;
+    padding: 1.5rem 1.8rem;
+    margin: 1.5rem 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    line-height: 1.8;
+  }
+
+  .funnel .num {
+    display: inline-block;
+    min-width: 10ch;
+    text-align: right;
+    color: var(--moss);
+    font-weight: 500;
+  }
+
+  .funnel .arrow {
+    color: var(--clay);
+    margin: 0 0.4em;
+  }
+
+  .funnel .label { color: var(--stone); }
+
+  /* --- Diagram boxes --- */
+  .diagram {
+    background: var(--bark);
+    color: #d4cfc6;
+    padding: 1.2rem 1.4rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 1rem 0 1.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.72rem;
+    line-height: 1.5;
+    white-space: pre;
+    border: 1px solid rgba(0,0,0,0.15);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+
+  /* --- Composition grids --- */
+  .comp-grid {
+    display: inline-block;
+    border: 1.5px solid var(--fog);
+    border-radius: 4px;
+    margin: 0.5rem 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    white-space: pre;
+    padding: 0.6rem 0.8rem;
+    background: var(--sand);
+    color: var(--bark);
+  }
+
+  /* --- Checklist --- */
+  .checklist {
+    list-style: none;
+    padding-left: 0;
+  }
+
+  .checklist li {
+    padding: 0.3rem 0 0.3rem 1.6rem;
+    position: relative;
+  }
+
+  .checklist li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.55rem;
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid var(--fog);
+    border-radius: 3px;
+    background: var(--cream);
+  }
+
+  /* --- Horizontal rule --- */
+  hr {
+    border: none;
+    height: 1px;
+    background: var(--fog);
+    margin: 2.5rem 0;
+  }
+
+  /* --- Callout --- */
+  .callout {
+    background: linear-gradient(135deg, rgba(90,110,82,0.08), rgba(74,112,128,0.06));
+    border-left: 3px solid var(--moss);
+    padding: 1rem 1.3rem;
+    border-radius: 0 6px 6px 0;
+    margin: 1.5rem 0;
+  }
+
+  .callout p { margin-bottom: 0.3rem; }
+
+  /* --- Score card --- */
+  .score-card {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1rem 0 1.5rem;
+  }
+
+  .score-item {
+    background: var(--sand);
+    border: 1px solid var(--faint);
+    border-radius: 6px;
+    padding: 0.8rem 1rem;
+  }
+
+  .score-item .label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--moss);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    margin-bottom: 0.2rem;
+  }
+
+  .score-item .desc {
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  /* --- Timeline --- */
+  .timeline {
+    position: relative;
+    padding-left: 2rem;
+    margin: 1.5rem 0;
+  }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 0.4rem;
+    top: 0.5rem;
+    bottom: 0.5rem;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--moss), var(--river), var(--clay), var(--dusk), var(--moss));
+    border-radius: 1px;
+  }
+
+  .timeline-item {
+    position: relative;
+    margin-bottom: 1.8rem;
+  }
+
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -1.75rem;
+    top: 0.45rem;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--cream);
+    border: 2px solid var(--moss);
+  }
+
+  .timeline-item:nth-child(2)::before { border-color: var(--river); }
+  .timeline-item:nth-child(3)::before { border-color: var(--clay); }
+  .timeline-item:nth-child(4)::before { border-color: var(--dusk); }
+  .timeline-item:nth-child(5)::before { border-color: var(--moss-light); }
+
+  .timeline-item h4 {
+    margin: 0 0 0.3rem;
+    color: var(--bark);
+  }
+
+  .timeline-item ul {
+    margin: 0;
+    padding-left: 1.2rem;
+    font-size: 0.95rem;
+  }
+
+  /* --- Footer --- */
+  .footer {
+    text-align: center;
+    padding: 2rem;
+    font-size: 0.85rem;
+    color: var(--clay);
+    font-style: italic;
+  }
+
+  /* --- Responsive --- */
+  @media (max-width: 640px) {
+    .hero h1 { font-size: 2.2rem; }
+    .container { padding: 1.5rem 1.2rem 3rem; }
+    .score-card { grid-template-columns: 1fr; }
+    pre, .diagram { font-size: 0.65rem; padding: 0.8rem; }
+    table { font-size: 0.82rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-content">
+    <h1>smallworld</h1>
+    <p class="subtitle">The algorithmic photography angle finder. Computes optimal camera positions from terrain geometry and composition principles.</p>
+  </div>
+  <div class="hero-terrain">
+    <svg viewBox="0 -20 1200 200" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style="overflow:visible">
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#2c2a25"/>
+          <stop offset="100%" stop-color="#33302b"/>
+        </linearGradient>
+        <linearGradient id="fg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#2e3f29"/>
+          <stop offset="100%" stop-color="#faf7f2"/>
+        </linearGradient>
+        <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#4a7080" stop-opacity="0.5"/>
+          <stop offset="100%" stop-color="#4a7080" stop-opacity="0.15"/>
+        </linearGradient>
+        <!-- gaussian glow for nodes -->
+        <radialGradient id="gauss1" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#c4a882" stop-opacity="0.25"/>
+          <stop offset="100%" stop-color="#c4a882" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="gauss2" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#6a98a8" stop-opacity="0.2"/>
+          <stop offset="100%" stop-color="#6a98a8" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="gauss3" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#7a9470" stop-opacity="0.18"/>
+          <stop offset="100%" stop-color="#7a9470" stop-opacity="0"/>
+        </radialGradient>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="1" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="softglow">
+          <feGaussianBlur stdDeviation="2"/>
+        </filter>
+      </defs>
+
+      <!-- sky -->
+      <rect x="0" y="-20" width="1200" height="200" fill="url(#sky)"/>
+
+      <!-- ============================================ -->
+      <!-- WIREFRAME MESH — perspective terrain grid    -->
+      <!-- ============================================ -->
+
+      <!-- horizontal mesh lines — terrain cross-sections, perspective-warped -->
+      <g stroke="#5a6e52" fill="none" opacity="0.1" stroke-width="0.5">
+        <path d="M0,72 Q100,68 200,58 Q300,42 380,35 Q440,28 480,32 Q540,40 600,48 Q700,38 780,30 Q860,36 940,44 Q1050,38 1120,42 L1200,45"/>
+        <path d="M0,82 Q120,78 220,70 Q320,58 400,52 Q460,46 510,50 Q570,56 640,62 Q720,54 800,48 Q880,52 960,58 Q1060,52 1140,55 L1200,58"/>
+        <path d="M0,92 Q130,89 240,82 Q340,72 420,66 Q480,62 530,65 Q600,70 670,75 Q740,68 820,62 Q900,66 980,72 Q1070,67 1150,68 L1200,70"/>
+        <path d="M0,102 Q140,100 260,94 Q360,86 440,80 Q500,76 550,79 Q620,84 700,88 Q760,82 840,77 Q920,80 1000,86 Q1080,82 1160,82 L1200,84"/>
+        <path d="M0,112 Q150,110 280,106 Q380,100 460,96 Q520,92 570,94 Q640,98 720,102 Q780,96 860,92 Q940,95 1020,100 Q1090,97 1170,96 L1200,98"/>
+        <path d="M0,122 Q160,121 300,118 Q400,114 480,110 Q540,108 590,110 Q660,114 740,116 Q800,112 880,108 Q960,110 1040,114 Q1100,112 1180,111 L1200,112"/>
+        <path d="M0,134 Q180,133 320,131 Q420,128 500,126 Q560,124 610,126 Q680,128 760,130 Q820,128 900,126 Q980,127 1060,130 Q1110,128 1190,128 L1200,128"/>
+        <path d="M0,146 Q200,146 340,144 Q440,142 520,141 Q580,140 630,141 Q700,142 780,144 Q840,143 920,142 Q1000,142 1080,144 Q1120,143 1200,143"/>
+      </g>
+
+      <!-- vertical mesh lines — perspective depth lines converging subtly -->
+      <g stroke="#5a6e52" fill="none" opacity="0.06" stroke-width="0.4">
+        <line x1="100" y1="55" x2="80" y2="155"/>
+        <line x1="200" y1="50" x2="185" y2="150"/>
+        <line x1="300" y1="42" x2="290" y2="148"/>
+        <line x1="400" y1="38" x2="395" y2="146"/>
+        <line x1="500" y1="35" x2="500" y2="145"/>
+        <line x1="600" y1="38" x2="605" y2="146"/>
+        <line x1="700" y1="35" x2="710" y2="146"/>
+        <line x1="800" y1="38" x2="815" y2="148"/>
+        <line x1="900" y1="40" x2="920" y2="148"/>
+        <line x1="1000" y1="42" x2="1025" y2="150"/>
+        <line x1="1100" y1="44" x2="1130" y2="152"/>
+      </g>
+
+      <!-- ============================================ -->
+      <!-- GAUSSIAN HEAT BLOBS — interest map hotspots  -->
+      <!-- ============================================ -->
+      <circle cx="455" cy="32" r="40" fill="url(#gauss1)"/>
+      <circle cx="780" cy="34" r="35" fill="url(#gauss1)"/>
+      <circle cx="290" cy="50" r="28" fill="url(#gauss2)"/>
+      <circle cx="620" cy="55" r="25" fill="url(#gauss3)"/>
+      <circle cx="950" cy="48" r="30" fill="url(#gauss2)"/>
+      <circle cx="150" cy="65" r="22" fill="url(#gauss3)"/>
+      <circle cx="1080" cy="42" r="24" fill="url(#gauss1)"/>
+
+      <!-- ============================================ -->
+      <!-- TERRAIN SILHOUETTE LAYERS                    -->
+      <!-- ============================================ -->
+
+      <!-- distant range — faintest -->
+      <path d="M0,78 Q60,74 120,65 Q160,55 200,50 Q250,42 290,46 Q340,52 380,42
+               Q420,30 455,25 Q485,20 510,28 Q550,38 600,45 Q650,38 700,30
+               Q740,24 775,22 Q810,28 850,38 Q900,42 950,36 Q1000,42 1050,38
+               Q1100,35 1150,40 L1200,42 L1200,180 L0,180 Z"
+            fill="#4a5d44" opacity="0.25"/>
+
+      <!-- mid range — wireframe-style stroke + faint fill -->
+      <path d="M0,95 Q50,92 100,85 Q140,78 180,75 Q220,68 260,62 Q300,55 340,58
+               Q380,52 410,45 Q435,38 455,32 Q475,26 495,30 Q530,40 560,48
+               Q590,52 620,50 Q660,45 700,40 Q735,34 760,30 Q785,28 810,34
+               Q850,42 890,48 Q930,44 960,40 Q1000,45 1040,50 Q1080,46 1120,48
+               L1160,52 L1200,55 L1200,180 L0,180 Z"
+            fill="#3d5236" opacity="0.4"/>
+      <!-- mid range ridge line — sketchy stroke -->
+      <path d="M0,95 Q50,92 100,85 Q140,78 180,75 Q220,68 260,62 Q300,55 340,58
+               Q380,52 410,45 Q435,38 455,32 Q475,26 495,30 Q530,40 560,48
+               Q590,52 620,50 Q660,45 700,40 Q735,34 760,30 Q785,28 810,34
+               Q850,42 890,48 Q930,44 960,40 Q1000,45 1040,50 Q1080,46 1120,48
+               L1160,52 L1200,55"
+            fill="none" stroke="#7a9470" stroke-width="0.8" opacity="0.35"/>
+
+      <!-- contour lines on mid range — topo map feel -->
+      <g stroke="#7a9470" stroke-width="0.4" fill="none" opacity="0.18">
+        <path d="M400,52 Q425,44 450,38 Q475,32 500,36 Q525,42 545,48"/>
+        <path d="M395,60 Q420,52 448,45 Q478,40 505,44 Q530,50 555,56"/>
+        <path d="M390,68 Q418,60 450,54 Q480,48 510,52 Q540,58 560,64"/>
+        <path d="M720,40 Q745,35 770,32 Q795,34 815,40"/>
+        <path d="M715,48 Q742,44 768,40 Q798,42 820,48"/>
+        <path d="M710,56 Q740,52 765,50 Q800,50 825,55"/>
+        <path d="M245,68 Q270,60 300,58 Q330,60 355,58"/>
+        <path d="M240,76 Q268,70 298,66 Q328,68 350,66"/>
+      </g>
+
+      <!-- lake reflection -->
+      <path d="M580,105 Q610,102 640,104 Q670,101 695,103 Q700,106 695,107
+               Q670,105 640,108 Q610,106 580,108 Z"
+            fill="url(#water)" opacity="0.45"/>
+
+      <!-- near ridge — solid -->
+      <path d="M0,125 Q40,122 80,118 Q120,112 160,108 Q200,104 240,108
+               Q280,112 320,106 Q360,100 400,104 Q440,110 480,114
+               Q520,110 560,108 Q600,104 640,106 Q680,110 720,112
+               Q760,108 800,104 Q840,100 880,104 Q920,108 960,112
+               Q1000,110 1040,108 Q1080,106 1120,110 L1160,112 L1200,115
+               L1200,180 L0,180 Z"
+            fill="#2e3f29" opacity="0.7"/>
+      <!-- near ridge line -->
+      <path d="M0,125 Q40,122 80,118 Q120,112 160,108 Q200,104 240,108
+               Q280,112 320,106 Q360,100 400,104 Q440,110 480,114
+               Q520,110 560,108 Q600,104 640,106 Q680,110 720,112
+               Q760,108 800,104 Q840,100 880,104 Q920,108 960,112
+               Q1000,110 1040,108 Q1080,106 1120,110 L1160,112 L1200,115"
+            fill="none" stroke="#7a9470" stroke-width="0.6" opacity="0.25"/>
+
+      <!-- foreground — blends to page -->
+      <path d="M0,148 Q60,145 120,142 Q180,139 240,140 Q300,142 360,140
+               Q420,137 480,138 Q540,140 600,138 Q660,136 720,138
+               Q780,140 840,138 Q900,136 960,138 Q1020,140 1080,139
+               Q1140,138 1200,140 L1200,180 L0,180 Z"
+            fill="url(#fg)"/>
+
+      <!-- ============================================ -->
+      <!-- GOLDEN RATIO / RULE OF THIRDS GRID           -->
+      <!-- ============================================ -->
+      <g stroke="#c4a882" stroke-width="0.4" opacity="0.1">
+        <!-- vertical thirds -->
+        <line x1="400" y1="0" x2="400" y2="180"/>
+        <line x1="800" y1="0" x2="800" y2="180"/>
+        <!-- golden ratio horizontals -->
+        <line x1="0" y1="69" x2="1200" y2="69"/>
+        <line x1="0" y1="111" x2="1200" y2="111"/>
+      </g>
+      <!-- golden ratio intersection markers — small + marks -->
+      <g stroke="#c4a882" stroke-width="0.6" opacity="0.18">
+        <line x1="396" y1="69" x2="404" y2="69"/><line x1="400" y1="65" x2="400" y2="73"/>
+        <line x1="796" y1="69" x2="804" y2="69"/><line x1="800" y1="65" x2="800" y2="73"/>
+        <line x1="396" y1="111" x2="404" y2="111"/><line x1="400" y1="107" x2="400" y2="115"/>
+        <line x1="796" y1="111" x2="804" y2="111"/><line x1="800" y1="107" x2="800" y2="115"/>
+      </g>
+
+      <!-- ============================================ -->
+      <!-- FIBONACCI SPIRAL — ghosted golden spiral     -->
+      <!-- ============================================ -->
+      <g transform="translate(800, 69)" opacity="0.07" stroke="#c4a882" stroke-width="0.7" fill="none">
+        <path d="M0,0 A42,42 0 0,1 42,42 A26,26 0 0,1 16,68 A16,16 0 0,1 0,52 A10,10 0 0,1 10,42 A6,6 0 0,1 16,48"/>
+      </g>
+
+      <!-- ============================================ -->
+      <!-- CAMERA + VIEWPOINT RAYS                      -->
+      <!-- ============================================ -->
+
+      <!-- camera 1 — main, on near ridge looking at main peak -->
+      <g opacity="0.55">
+        <polygon points="365,100 369,107 361,107" fill="none" stroke="#c4a882" stroke-width="0.7"/>
+        <!-- FOV cone — dashed sight lines -->
+        <line x1="365" y1="100" x2="420" y2="40" stroke="#c4a882" stroke-width="0.35" stroke-dasharray="3,4" opacity="0.5"/>
+        <line x1="365" y1="100" x2="490" y2="32" stroke="#c4a882" stroke-width="0.35" stroke-dasharray="3,4" opacity="0.5"/>
+        <!-- FOV arc -->
+        <path d="M420,40 Q455,30 490,32" fill="none" stroke="#c4a882" stroke-width="0.3" stroke-dasharray="2,3" opacity="0.35"/>
+      </g>
+
+      <!-- camera 2 — secondary, on far right looking at second peak -->
+      <g opacity="0.35">
+        <polygon points="870,98 874,105 866,105" fill="none" stroke="#6a98a8" stroke-width="0.6"/>
+        <line x1="870" y1="98" x2="790" y2="32" stroke="#6a98a8" stroke-width="0.3" stroke-dasharray="2,4" opacity="0.4"/>
+        <line x1="870" y1="98" x2="750" y2="28" stroke="#6a98a8" stroke-width="0.3" stroke-dasharray="2,4" opacity="0.4"/>
+      </g>
+
+      <!-- camera 3 — drone, elevated, with altitude line -->
+      <g opacity="0.3">
+        <polygon points="600,70 604,77 596,77" fill="none" stroke="#9e7c5a" stroke-width="0.6"/>
+        <!-- altitude reference line down to ground -->
+        <line x1="600" y1="77" x2="600" y2="104" stroke="#9e7c5a" stroke-width="0.3" stroke-dasharray="1,3" opacity="0.5"/>
+        <!-- sight lines -->
+        <line x1="600" y1="70" x2="540" y2="48" stroke="#9e7c5a" stroke-width="0.25" stroke-dasharray="2,4" opacity="0.35"/>
+        <line x1="600" y1="70" x2="660" y2="45" stroke="#9e7c5a" stroke-width="0.25" stroke-dasharray="2,4" opacity="0.35"/>
+      </g>
+
+      <!-- ============================================ -->
+      <!-- POI MARKERS — detected features              -->
+      <!-- ============================================ -->
+      <g filter="url(#glow)">
+        <!-- peaks — small dots at summit points -->
+        <circle cx="455" cy="25" r="1.5" fill="#c4a882" opacity="0.6"/>
+        <circle cx="775" cy="22" r="1.5" fill="#c4a882" opacity="0.6"/>
+        <circle cx="300" cy="55" r="1.2" fill="#c4a882" opacity="0.45"/>
+        <!-- water feature -->
+        <circle cx="640" cy="104" r="1.2" fill="#6a98a8" opacity="0.5"/>
+        <!-- ridge point -->
+        <circle cx="960" cy="40" r="1" fill="#7a9470" opacity="0.4"/>
+      </g>
+
+      <!-- ============================================ -->
+      <!-- MEASUREMENT ANNOTATIONS — sketch feel        -->
+      <!-- ============================================ -->
+
+      <!-- elevation tick marks on left edge -->
+      <g stroke="#c4a882" stroke-width="0.3" opacity="0.12">
+        <line x1="0" y1="25" x2="8" y2="25"/>
+        <line x1="0" y1="50" x2="6" y2="50"/>
+        <line x1="0" y1="75" x2="8" y2="75"/>
+        <line x1="0" y1="100" x2="6" y2="100"/>
+        <line x1="0" y1="125" x2="8" y2="125"/>
+        <line x1="0" y1="150" x2="6" y2="150"/>
+      </g>
+
+      <!-- distance scale bar at bottom -->
+      <g transform="translate(50, 168)" stroke="#c4a882" stroke-width="0.3" opacity="0.12">
+        <line x1="0" y1="0" x2="80" y2="0"/>
+        <line x1="0" y1="-2" x2="0" y2="2"/>
+        <line x1="40" y1="-1.5" x2="40" y2="1.5"/>
+        <line x1="80" y1="-2" x2="80" y2="2"/>
+      </g>
+
+      <!-- angle measurement arc near camera 1 -->
+      <path d="M365,100 Q375,88 385,95" fill="none" stroke="#c4a882" stroke-width="0.3" opacity="0.2"/>
+
+      <!-- ============================================ -->
+      <!-- SCATTERED COORDINATE LABELS — faint data     -->
+      <!-- ============================================ -->
+      <g font-family="'JetBrains Mono', monospace" font-size="4" fill="#c4a882" opacity="0.1">
+        <text x="460" y="20">37.74N</text>
+        <text x="780" y="18">119.59W</text>
+        <text x="50" y="170">0m</text>
+        <text x="130" y="170">5km</text>
+      </g>
+
+      <!-- ============================================ -->
+      <!-- EDGE DETECTION SKETCH — hatching on cliff    -->
+      <!-- ============================================ -->
+      <g stroke="#7a9470" stroke-width="0.25" opacity="0.12">
+        <!-- sketch-style hatch marks on steep terrain (the main peak) -->
+        <line x1="440" y1="28" x2="443" y2="38"/>
+        <line x1="445" y1="26" x2="448" y2="36"/>
+        <line x1="450" y1="25" x2="453" y2="34"/>
+        <line x1="455" y1="25" x2="458" y2="32"/>
+        <line x1="460" y1="26" x2="463" y2="34"/>
+        <line x1="465" y1="28" x2="468" y2="36"/>
+        <line x1="470" y1="30" x2="473" y2="38"/>
+        <!-- hatch on second peak -->
+        <line x1="760" y1="26" x2="763" y2="34"/>
+        <line x1="765" y1="24" x2="768" y2="32"/>
+        <line x1="770" y1="23" x2="773" y2="30"/>
+        <line x1="775" y1="22" x2="778" y2="30"/>
+        <line x1="780" y1="24" x2="783" y2="32"/>
+        <line x1="785" y1="26" x2="788" y2="34"/>
+      </g>
+
+      <!-- ============================================ -->
+      <!-- CURVATURE FLOW LINES — mathematical feel     -->
+      <!-- ============================================ -->
+      <g stroke="#6a98a8" stroke-width="0.3" fill="none" opacity="0.08">
+        <!-- flow/gradient lines down from peaks, showing steepest descent -->
+        <path d="M455,32 Q458,45 465,55 Q470,65 480,80"/>
+        <path d="M455,32 Q450,45 445,58 Q440,70 432,82"/>
+        <path d="M455,32 Q460,42 470,50 Q482,60 495,72"/>
+        <path d="M775,28 Q780,40 788,50 Q795,60 805,72"/>
+        <path d="M775,28 Q770,40 762,52 Q755,62 745,72"/>
+        <path d="M775,28 Q778,38 782,48 Q790,58 800,65"/>
+      </g>
+
+    </svg>
+  </div>
+</div>
+
+<div class="container">
+
+  <blockquote>No tool today algorithmically analyzes terrain to find optimal photography viewpoints using composition principles. Every technical component exists independently. The integration is the innovation.</blockquote>
+
+  <!-- ========================================= -->
+  <h2>What It Does</h2>
+
+  <p>A photographer or drone pilot specifies a location and search radius. smallworld analyzes the terrain geometry and <strong>computes</strong> the objectively best camera angles &mdash; positions and orientations that produce compositions following the golden ratio, rule of thirds, fibonacci spirals, leading lines, and other principles of visual beauty.</p>
+
+  <p>It also accepts a <strong>style reference</strong> (a painting, photo, or artwork) and finds terrain that geometrically resembles the reference when viewed from the right angle.</p>
+
+  <p>Results are rendered as photorealistic previews with GPS coordinates, altitude, and heading &mdash; ready to navigate to and shoot.</p>
+
+  <!-- ========================================= -->
+  <h2>The Key Insight</h2>
+
+  <p>Traditional approach: generate millions of random camera angles, render each one, score for beauty. <em>Computationally impossible.</em></p>
+
+  <p>Our approach: <strong>composition rules are geometric constraints.</strong> If you know where terrain features are in 3D and where you want them in the 2D frame, the camera position is a solvable equation &mdash; not a search problem. This is the inverse of the Perspective-n-Point problem from computer vision.</p>
+
+  <div class="funnel">
+    <div><span class="num">10,000,000,000</span> <span class="label">possible viewpoints (brute force)</span></div>
+    <div><span class="num"></span> <span class="arrow">&darr;</span> <span class="label" style="color:var(--moss);">Deterministic computation from geometry</span></div>
+    <div><span class="num">~500</span> <span class="label">candidates, all compositionally valid</span></div>
+    <div><span class="num"></span> <span class="arrow">&darr;</span> <span class="label" style="color:var(--moss);">Score for non-composition beauty</span></div>
+    <div><span class="num">~50</span> <span class="label">beautiful, well-composed viewpoints</span></div>
+    <div><span class="num"></span> <span class="arrow">&darr;</span> <span class="label" style="color:var(--moss);">Render + neural aesthetic scoring</span></div>
+    <div><span class="num">~20</span> <span class="label">top viewpoints</span></div>
+    <div><span class="num"></span> <span class="arrow">&darr;</span> <span class="label" style="color:var(--moss);">CMA-ES fine-tuning</span></div>
+    <div><span class="num">~10</span> <span class="label">optimized final viewpoints delivered</span></div>
+  </div>
+
+  <!-- ========================================= -->
+  <h2>Architecture</h2>
+
+  <div class="diagram">Frontend (Next.js + CesiumJS)
+  &boxdr;&boxh; Map Picker: click to set location + radius
+  &boxdr;&boxh; Filter Panel: feature weights, composition prefs, mode
+  &boxdr;&boxh; Results Gallery: ranked viewpoints with score breakdowns
+  &boxdr;&boxh; Style Reference: upload artwork, find matching terrain
+  &boxdr;&boxh; Chat Interface: NL commands &rarr; agent &rarr; pipeline &rarr; results
+  &boxur;&boxh; CesiumJS Globe: 3D terrain, fly-to viewpoints, screenshots
+
+Agent Layer (Claude Haiku via tool use)
+  &boxdr;&boxh; NL &rarr; Filters: parse natural language into pipeline config
+  &boxdr;&boxh; Refinement: re-run pipeline with adjusted params
+  &boxdr;&boxh; Descriptions: narrate results in photographer language
+  &boxdr;&boxh; Style Interpretation: understand reference intent
+  &boxur;&boxh; Multi-Location: plan itinerary across areas
+       (~500ms per turn, doesn&rsquo;t touch the math pipeline)
+
+Backend (Python FastAPI)
+  &boxdr;&boxh; Phase 1: Terrain Analysis
+  &boxv;    Fetch DEM &rarr; slope, curvature, flow accumulation
+  &boxv;    &rarr; peaks, ridges, cliffs, water, saddles
+  &boxdr;&boxh; Phase 2: Scene Grouping
+  &boxv;    Cluster features into photographable scenes
+  &boxdr;&boxh; Phase 3: Deterministic Camera Computation
+  &boxv;    Composition templates + inverse PnP solver
+  &boxv;    + ridge fractal dim &rarr; optimal viewing distance
+  &boxv;    &rarr; ~500 candidates, all compositionally valid
+  &boxdr;&boxh; Phase 4: Fast Beauty Scoring (all from DEM, no rendering)
+  &boxv;    Viewshed, entropy, skyline fractal dim, prospect-refuge,
+  &boxv;    depth, mystery
+  &boxdr;&boxh; Phase 5: Render + Neural Scoring
+  &boxv;    CesiumJS headless &rarr; LAION Aesthetics v2.5
+  &boxv;    + CACNet composition verification
+  &boxdr;&boxh; Phase 6: CMA-ES Refinement
+  &boxv;    Fine-tune top 10 (50 evals each, 3&times; better than gradient descent)
+  &boxdr;&boxh; Phase 7: Optimal Lighting Time
+  &boxv;    Sun positions through day &rarr; shadow cast on DEM
+  &boxv;    (reuses viewshed) &rarr; score shadow/light patterns
+  &boxv;    &rarr; best time of day per viewpoint
+  &boxur;&boxh; Phase 8: Enhancement + Export
+       Nano Banana 2 &rarr; photorealistic preview
+       Style ref &rarr; IP-Adapter + ControlNet
+       Drone export &rarr; Litchi CSV (GPS/alt/heading/pitch)</div>
+
+  <!-- ========================================= -->
+  <h2>Phase-by-Phase Algorithm</h2>
+
+  <!-- Phase 1 -->
+  <h3>Phase 1: Terrain Feature Extraction</h3>
+
+  <p>When a user clicks the map and sets a radius, we download elevation data from AWS Terrain Tiles (free, unlimited, global). Each tile is an RGB PNG encoding elevation. We decode it to a NumPy grid at ~30&ndash;75m resolution.</p>
+
+  <h4>Terrain Derivatives</h4>
+  <table>
+    <thead><tr><th>Derivative</th><th>What it finds</th><th>Method</th></tr></thead>
+    <tbody>
+      <tr><td>Slope</td><td>Steepness</td><td>First partial derivatives (Horn&rsquo;s formula)</td></tr>
+      <tr><td>Profile curvature</td><td>Cliff edges, convex/concave breaks</td><td>Second derivative along slope</td></tr>
+      <tr><td>Plan curvature</td><td>Ridge crests, valley bottoms</td><td>Second derivative &perp; to slope</td></tr>
+      <tr><td>Laplacian</td><td>Dramatic terrain changes</td><td>Sum of second partial derivatives</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Feature Extraction</h4>
+  <ul>
+    <li><strong>Peaks:</strong> Local maxima filtered by topographic prominence (minimum descent to reach higher terrain). Separates landmarks from noise.</li>
+    <li><strong>Ridgelines:</strong> Invert the DEM, run D8 flow accumulation. Water paths in the inverted map = ridgelines in reality. An elegant hydrology trick.</li>
+    <li><strong>Cliffs:</strong> Cells where |profile curvature| exceeds the 95th percentile.</li>
+    <li><strong>Streams:</strong> D8 flow accumulation on normal DEM. High upstream drainage = stream channel.</li>
+    <li><strong>Lakes:</strong> Fill depressions; cells where filled DEM exceeds original by a threshold.</li>
+    <li><strong>Saddle points:</strong> Strongly negative Gaussian curvature &mdash; terrain curves up in one direction, down in another.</li>
+  </ul>
+
+  <h4>Interest Map</h4>
+  <p>All features combined into a weighted heatmap. User adjusts weights via sliders:</p>
+  <pre><code>interest = (
+    w_peaks  &times; distance_decay(peaks)  +
+    w_ridges &times; ridgelines             +
+    w_cliffs &times; normalize(|profile_curvature|) +
+    w_water  &times; distance_decay(streams | lakes) +
+    w_relief &times; normalize(local_elevation_range)
+)</code></pre>
+  <p>Time estimate: ~5 seconds for 20km radius.</p>
+
+  <!-- Phase 2 -->
+  <h3>Phase 2: Scene Grouping</h3>
+  <p>Cluster features into photographable &ldquo;scenes&rdquo; &mdash; groups that could appear together in one frame:</p>
+  <ul>
+    <li>Peak + nearby lake &rarr; mountain reflection shot</li>
+    <li>Two peaks + connecting ridge &rarr; dramatic skyline</li>
+    <li>Cliff face + valley floor &rarr; vertical drama</li>
+    <li>Stream confluence + surrounding peaks &rarr; compositional anchor</li>
+    <li>Ridge + distant peak behind &rarr; depth/layering</li>
+  </ul>
+
+  <!-- Phase 3 -->
+  <h3>Phase 3: Deterministic Camera Computation</h3>
+
+  <div class="callout">
+    <p><strong>This is the core innovation.</strong> Composition rules define where features should appear on screen. Feature positions are known in 3D. The camera position that places features at those spots is a solvable equation, not a search.</p>
+  </div>
+
+  <h4>Composition Templates</h4>
+
+  <p><strong>Rule of Thirds</strong> &mdash; primary feature at one of four power points:</p>
+  <div class="comp-grid">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+&boxv;       &boxv;       &boxv;   *   &boxv;  &larr; Peak at (2W/3, H/3)
+&boxvr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxcr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxcr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxvl;
+&boxv;       &boxv;       &boxv;       &boxv;
+&boxvr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxcr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxcr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxvl;
+&boxv;   *   &boxv;       &boxv;       &boxv;  &larr; Lake at (W/3, 2H/3)
+&boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;</div>
+
+  <p><strong>Golden Ratio</strong> &mdash; features at &phi; intersections, horizon at 0.618 &times; H.</p>
+
+  <p><strong>Leading Line</strong> &mdash; camera behind a ridge, looking along it toward the subject:</p>
+  <div class="comp-grid">&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+&boxv;             * peak &boxv;
+&boxv;           &frasl;        &boxv;
+&boxv;         &frasl; ridge    &boxv;
+&boxv;       &frasl;            &boxv;
+&boxv;     &frasl;              &boxv;
+&boxur;&boxh;&boxh;&boxh;&frasl;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;</div>
+
+  <p><strong>Symmetry</strong> &mdash; camera on perpendicular bisector of two features, centered horizon.</p>
+
+  <h4>Fractal Dimension Distance</h4>
+  <p>The skyline is dominated by ridgelines &mdash; already extracted from the DEM. We compute each ridgeline&rsquo;s fractal dimension directly from its elevation profile at multiple smoothing scales. Viewing distance determines which scale you perceive, so we can <strong>solve for the distance that produces D &asymp; 1.3:</strong></p>
+  <pre><code>for ridge in ridgelines:
+    profile = elevation_along(ridge)
+    for scale in [50, 100, 200, 500, 1000]:  # meters
+        fd_at_scale[scale] = box_counting_fd(smooth(profile, scale))
+
+    # find scale where D &asymp; 1.3
+    optimal_scale = interpolate(fd_at_scale, target=1.3)
+    optimal_distance = optimal_scale * image_width_px / fov_radians
+
+    # camera perpendicular to ridge at that distance
+    camera = ridge.midpoint + ridge.normal * optimal_distance</code></pre>
+  <p>No rendering needed &mdash; the ridgeline geometry tells us exactly where to stand for the optimal skyline complexity.</p>
+
+  <h4>Solving for Camera Pose</h4>
+  <p><strong>Pitch</strong> is computed directly from desired horizon placement:</p>
+  <pre><code>pitch = arctan((desired_horizon_y - H/2) / focal_length)</code></pre>
+
+  <p><strong>Position + yaw</strong> from feature placement (inverse PnP): with 2 features assigned to 2 screen positions and pitch known, we have 4 equations and 4 unknowns. A determined system with 1&ndash;2 solutions.</p>
+
+  <p>Each scene &times; each composition template yields ~20&ndash;30 camera poses. All compositionally valid by construction. Total: ~300&ndash;500 candidates in under 1 second.</p>
+
+  <!-- Phase 4 -->
+  <h3>Phase 4: Fast Beauty Scoring</h3>
+  <p>Composition is already guaranteed. Score only for non-compositional beauty using terrain math alone (no rendering):</p>
+
+  <div class="score-card">
+    <div class="score-item">
+      <div class="label">Viewshed Richness</div>
+      <div class="desc">How much interesting terrain is visible. Visibility mask &times; interest map.</div>
+    </div>
+    <div class="score-item">
+      <div class="label">Viewpoint Entropy</div>
+      <div class="desc">Shannon entropy of elevation bins in visible area. Diverse terrain = interesting view.</div>
+    </div>
+    <div class="score-item">
+      <div class="label">Skyline Fractal Dim</div>
+      <div class="desc">Cast rays across FOV, record max elevation angle per ray &rarr; 1D skyline profile. Box-counting gives fractal dimension. Score peaks at D &asymp; 1.3. Free &mdash; reuses viewshed ray-casting.</div>
+    </div>
+    <div class="score-item">
+      <div class="label">Prospect-Refuge</div>
+      <div class="desc">Balance of open vista (prospect) and nearby enclosure (refuge). Harmonic mean of viewshed area vs. terrain above horizon.</div>
+    </div>
+    <div class="score-item">
+      <div class="label">Depth Layering</div>
+      <div class="desc">Foreground/midground/background balance. Score evenness of terrain at three distance zones.</div>
+    </div>
+    <div class="score-item">
+      <div class="label">Mystery Score</div>
+      <div class="desc">Ratio of &ldquo;almost visible&rdquo; interesting terrain to total visible terrain. Valleys curving out of sight score higher.</div>
+    </div>
+    <div class="score-item">
+      <div class="label">Water Visibility</div>
+      <div class="desc">Amount of visible water features. Strongly correlated with scenic beauty ratings (Schirpke, R&sup2;=0.72).</div>
+    </div>
+  </div>
+
+  <p>Time estimate: ~15 seconds for 500 candidates.</p>
+
+  <!-- Phase 5 -->
+  <h3>Phase 5: Render + Neural Scoring</h3>
+  <p>Top ~50 candidates rendered via CesiumJS headless (Puppeteer screenshots). Each image scored by:</p>
+  <ul>
+    <li><strong>LAION Aesthetics v2.5</strong> &mdash; neural beauty score (1&ndash;10), pip-installable, ~50ms/image.</li>
+    <li><strong>CACNet composition verification</strong> &mdash; confirms the render matches the intended composition type.</li>
+  </ul>
+  <p>Note: skyline fractal dimension is already computed in Phase 4 from DEM data alone &mdash; no rendering needed.</p>
+  <p>Time estimate: ~30 seconds.</p>
+
+  <!-- Phase 6 -->
+  <h3>Phase 6: CMA-ES Refinement</h3>
+  <p>Top 10 candidates fine-tuned with CMA-ES (Covariance Matrix Adaptation Evolution Strategy). Empirically proven to achieve <strong>3&times; better aesthetic improvement</strong> than gradient descent for camera pose optimization.</p>
+  <p>It maintains a population of 8 candidate viewpoints, evaluates each, and adapts its search distribution to home in on the optimal angle. ~50 evaluations per candidate.</p>
+  <p>Time estimate: ~2 minutes (500 total renders).</p>
+
+  <!-- Phase 7 -->
+  <h3>Phase 7: Optimal Lighting Time</h3>
+  <p>For each final viewpoint, compute the best time of day for dramatic light. The sun is a directional light source, and shadow casting on a DEM is the <strong>same ray-casting we already use for viewshed</strong> &mdash; just from the sun&rsquo;s direction.</p>
+  <p>Sample sun positions every 15 minutes from sunrise to sunset (~50 samples via <code>astral</code> or <code>pvlib</code>). For each, cast shadows on the DEM and score the shadow pattern within the camera&rsquo;s visible area.</p>
+
+  <div class="score-card">
+    <div class="score-item">
+      <div class="label">Shadow/Light Ratio</div>
+      <div class="desc">~35% shadow is ideal. Too little = flat noon light. Too much = underexposed.</div>
+    </div>
+    <div class="score-item">
+      <div class="label">Sun Elevation</div>
+      <div class="desc">Low sun (~8&deg;) creates long, dramatic shadows. Golden hour exists for a reason.</div>
+    </div>
+    <div class="score-item">
+      <div class="label">Rake Angle</div>
+      <div class="desc">Light perpendicular to cliff faces reveals every ridge and crevice. Head-on light flattens everything.</div>
+    </div>
+    <div class="score-item">
+      <div class="label">Peak-Lit / Valley-Shadow</div>
+      <div class="desc">The classic landscape look &mdash; illuminated summits with shadowed valleys. Score by elevation&times;light correlation.</div>
+    </div>
+  </div>
+
+  <p><strong>Output per viewpoint:</strong> Best time (&ldquo;7:14 AM&rdquo;), lighting description (&ldquo;eastern light rakes cliff face, peaks lit with valley in shadow&rdquo;), secondary time, and a mini timeline of scores throughout the day. The best achievable shadow score also feeds back into overall viewpoint ranking.</p>
+  <p>Time estimate: ~2&ndash;3 seconds per viewpoint (reuses viewshed infrastructure).</p>
+
+  <!-- Phase 8 -->
+  <h3>Phase 8: Enhancement + Export</h3>
+  <p>CesiumJS renders passed through <strong>Nano Banana 2</strong> (Gemini 3.1 Flash, free API) for photorealistic previews. Style reference applied via IP-Adapter + ControlNet.</p>
+  <p><strong>Drone flight path export:</strong> Top viewpoints exported as a Litchi-compatible CSV. Columns map directly from our computed camera poses: lat/lng &rarr; position, altitude (MSL), heading &rarr; yaw, gimbal pitch &rarr; camera tilt. Viewpoints ordered by nearest-neighbor TSP to minimize flight distance. User imports CSV into Litchi, flies the mission &mdash; the drone navigates to each viewpoint, sets up the exact shot, and auto-triggers the shutter.</p>
+
+  <!-- ========================================= -->
+  <h2>Style Reference Pipeline</h2>
+
+  <p>The style reference must change <em>what terrain we look for</em>, not just re-rank final candidates. The solution: <strong>contour topology matching.</strong></p>
+
+  <h3>Step 1: Structural Fingerprint</h3>
+  <p>Extract the geometric skeleton of the reference image via HED edge detection (~50ms). Compute a ~100-dimensional fingerprint: curvature histogram per quadrant, orientation histogram per quadrant, spatial density, parallelism, dominant direction.</p>
+
+  <h3>Step 2: Terrain Patch Matching</h3>
+  <p>Slide a window across the DEM. For each patch, compute contour line properties (spacing, curvature, parallelism, orientation, sinuosity). Compare against reference fingerprint. Matching patches become style-driven POIs.</p>
+
+  <h3>Step 3: Deterministic Camera from Surface Normals</h3>
+  <p>For each matching patch, the terrain surface normal tells us where to stand. Distance determined by feature scale vs. reference scale. Height from edge vertical distribution in reference. This is computation, not search.</p>
+
+  <h3>Step 4: Gradient Refinement</h3>
+  <p>Project contour lines onto camera plane (matrix multiplication), compute fingerprint, compare. Iterate via numerical gradient ascent. 50 iterations &times; 10 perturbations = 500 evaluations at microseconds each = under 1 second.</p>
+
+  <h3>Step 5: Rendered Comparison</h3>
+  <p>Top 20 style-matched candidates rendered and compared via CLIP embeddings + LPIPS. Now meaningful because candidates were selected for geometric similarity.</p>
+
+  <!-- ========================================= -->
+  <h2>Agent / Conversational Interface</h2>
+
+  <p>The agent <strong>wraps</strong> the pipeline &mdash; it doesn&rsquo;t sit inside it. The core math runs at native speed with zero LLM overhead. The agent orchestrates phases via tool calls and adds intelligence at the boundaries where natural language understanding matters.</p>
+
+  <div class="callout">
+    <p><strong>Where the agent doesn&rsquo;t go:</strong> Terrain analysis, inverse PnP, beauty scoring, CMA-ES &mdash; all pure NumPy/SciPy math. An LLM there would add latency for zero benefit. The agent adds value at five specific touchpoints where structured computation can&rsquo;t handle ambiguity.</p>
+  </div>
+
+  <h3>1. Natural Language &rarr; Filter Config</h3>
+  <p>User says: <em>&ldquo;Find dramatic cliff shots near Yosemite, something with depth and a strong foreground.&rdquo;</em></p>
+  <p>The agent translates this to pipeline parameters &mdash; location, feature weights, beauty weights, composition preferences, mode. Replaces manual slider adjustment with a single sentence.</p>
+
+  <h3>2. Result Refinement Loop</h3>
+  <p>After results return, the user says: <em>&ldquo;These are too far from the cliff edge. I want to feel like I&rsquo;m right on the edge looking down.&rdquo;</em></p>
+  <p>The agent interprets this as parameter adjustments (min slope at camera, max distance from cliff, downward pitch preference) and re-runs the pipeline. Each refinement cycle takes 30&ndash;60 seconds. Conversation context is maintained so each iteration builds on the last.</p>
+
+  <h3>3. Result Descriptions</h3>
+  <p>For each viewpoint, the agent generates a photographer-friendly narrative:</p>
+  <blockquote>&ldquo;You&rsquo;re standing on a granite ledge at 2,847m, 40m back from the cliff edge. Half Dome fills the upper-right third of the frame with El Capitan&rsquo;s face in the left midground. A natural leading line runs from the pine tree cluster at your feet toward the valley floor. Best light at 6:42 AM when low eastern sun rakes across the cliff face.&rdquo;</blockquote>
+  <p>Generated in parallel for all results &mdash; doesn&rsquo;t block the pipeline.</p>
+
+  <h3>4. Style Reference Interpretation</h3>
+  <p>When a user uploads a reference image, the agent adds semantic understanding on top of the geometric fingerprinting &mdash; not just &ldquo;find terrain with similar curves&rdquo; but &ldquo;find terrain that would produce similar dramatic impact.&rdquo; It augments the contour topology matcher with high-level compositional intent.</p>
+
+  <h3>5. Multi-Location Itinerary Planning</h3>
+  <p>For multi-day photography trips, the agent chains pipeline runs across multiple coordinates, cross-references optimal lighting times, and plans logistics:</p>
+  <pre><code>Day 1 &mdash; Lauterbrunnen Valley
+  5:45 AM  M&auml;nnlichen ridge (golden hour, Eiger north face)
+  7:30 AM  Kleine Scheidegg (morning side-light on Jungfrau)
+  5:15 PM  Stechelberg cliff edge (sunset rake on valley walls)
+
+Day 2 &mdash; Zermatt
+  6:00 AM  Gornergrat viewpoint (Matterhorn dawn)
+  ...
+
+Route: 127km driving, ordered by time-of-day constraints.
+Litchi CSV for drone shots attached.</code></pre>
+
+  <h3>Agent Architecture</h3>
+  <div class="diagram">User &harr; Chat UI &harr; Agent (Claude Haiku)
+                     &boxv;
+                     &boxvr;&boxh;&boxh; tool: parse_location(text) &rarr; lat/lng
+                     &boxvr;&boxh;&boxh; tool: run_pipeline(config) &rarr; results
+                     &boxvr;&boxh;&boxh; tool: adjust_filters(adjustments) &rarr; results
+                     &boxvr;&boxh;&boxh; tool: describe_viewpoint(viewpoint) &rarr; narrative
+                     &boxvr;&boxh;&boxh; tool: interpret_reference(image) &rarr; config
+                     &boxur;&boxh;&boxh; tool: plan_itinerary(locations, days) &rarr; schedule</div>
+  <p>Stateless between turns (Haiku via API). Conversation history maintained by the frontend. Adds ~500ms per turn &mdash; negligible next to the 30&ndash;60s pipeline.</p>
+
+  <h3>Demo Flow</h3>
+  <ol>
+    <li>User types: <em>&ldquo;Show me the most dramatic cliffside shots within 20km of Yosemite Valley, I want that Ansel Adams feel&rdquo;</em></li>
+    <li>Agent: <em>&ldquo;Searching for dramatic cliff formations near Yosemite with strong tonal contrast compositions&hellip;&rdquo;</em> (starts pipeline)</li>
+    <li>45 seconds later: results appear on the globe with fly-to animations</li>
+    <li>Agent describes the top 3 viewpoints in photographer language</li>
+    <li>User: <em>&ldquo;I like #2 but can you find something with more foreground interest?&rdquo;</em></li>
+    <li>Agent adjusts depth_layering weight, re-runs &rarr; refined results in 30s</li>
+    <li>User: <em>&ldquo;Perfect. When should I be there and export it to my drone&rdquo;</em></li>
+    <li>Agent: <em>&ldquo;Best light at 6:42 AM. Litchi CSV downloaded &mdash; 3 waypoints, 4.2km flight path.&rdquo;</em></li>
+  </ol>
+
+  <!-- ========================================= -->
+  <h2>The Mathematical Foundation</h2>
+
+  <h3>Fractal Dimension &asymp; 1.3</h3>
+  <p>Humans consistently prefer landscapes with fractal dimension around 1.3&ndash;1.5 (Sprott 2003, Hagerhall 2004). This matches clouds, coastlines, tree canopies &mdash; patterns our visual system evolved to process fluently.</p>
+  <p><strong>No rendering needed.</strong> The skyline is computable directly from the DEM: cast rays across the FOV, record the max elevation angle per ray &mdash; that 1D profile IS the skyline. Box-counting gives the fractal dimension. This reuses viewshed ray-casting, so it&rsquo;s essentially free.</p>
+  <p><strong>Also deterministically computable.</strong> Ridgeline fractal dimension at multiple smoothing scales lets us solve for the viewing distance where D &asymp; 1.3 &mdash; another geometric constraint for camera placement, not a search-and-filter metric.</p>
+
+  <h3>Prospect-Refuge Theory</h3>
+  <p>Appleton (1975): we prefer views balancing open vistas (prospect &mdash; spot predators) and nearby enclosure (refuge &mdash; hide). Cliff edges overlooking valleys with mountains behind = perfect balance.</p>
+
+  <h3>Kaplan &amp; Kaplan Preference Matrix</h3>
+  <table>
+    <thead><tr><th>Factor</th><th>Definition</th><th>Computation</th></tr></thead>
+    <tbody>
+      <tr><td>Coherence</td><td>Visual order, organization</td><td>Texture homogeneity, moderate image entropy</td></tr>
+      <tr><td>Complexity</td><td>Richness, number of elements</td><td>Edge density &times; color entropy (optimal is intermediate)</td></tr>
+      <tr><td>Legibility</td><td>Sense of place, navigability</td><td>Visible landmarks + open traversable areas</td></tr>
+      <tr><td>Mystery</td><td>Promise of more information</td><td>Near-viewshed-boundary interesting terrain / total visible</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Viewpoint Entropy</h3>
+  <p>V&aacute;zquez et al. (2001): Shannon entropy of the visibility distribution. H = &minus;&Sigma; p<sub>i</sub> &times; log(p<sub>i</sub>). Diverse visible terrain = high entropy = interesting view.</p>
+
+  <h3>Scenic Beauty Estimation</h3>
+  <p>Schirpke et al.&rsquo;s GIS model (R&sup2;=0.72): shape complexity (+), landscape diversity (+), water/lakes/glaciers (++), high-altitude vistas (+), infrastructure proximity (&minus;).</p>
+
+  <!-- ========================================= -->
+  <h2>Tech Stack</h2>
+
+  <table>
+    <thead><tr><th>Layer</th><th>Technology</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Frontend</td><td>Next.js + TypeScript</td><td>Fast to scaffold, good DX</td></tr>
+      <tr><td>3D Globe</td><td>CesiumJS</td><td>Free, 3D terrain, camera API, screenshots</td></tr>
+      <tr><td>Backend</td><td>Python FastAPI</td><td>NumPy/SciPy for terrain math, ML inference</td></tr>
+      <tr><td>DEM Data</td><td>AWS Terrain Tiles</td><td>Free, unlimited, no API key</td></tr>
+      <tr><td>Satellite Imagery</td><td>Mapbox satellite</td><td>750K tiles/month free</td></tr>
+      <tr><td>Land Cover</td><td>OSM Overpass API</td><td>Free, global, water/forest/urban labels</td></tr>
+      <tr><td>Aesthetic Scoring</td><td>LAION Aesthetics v2.5</td><td>pip install, fast inference</td></tr>
+      <tr><td>Composition</td><td>CACNet</td><td>13 composition types, pretrained</td></tr>
+      <tr><td>Optimization</td><td>pycma</td><td>CMA-ES, pip install</td></tr>
+      <tr><td>Enhancement</td><td>Nano Banana 2</td><td>Free API, fast, up to 4K</td></tr>
+      <tr><td>Style Matching</td><td>HED + CLIP</td><td>Edge extraction + perceptual similarity</td></tr>
+      <tr><td>Headless Render</td><td>Puppeteer</td><td>CesiumJS screenshots server-side</td></tr>
+      <tr><td>Agent / Chat</td><td>Claude Haiku (Anthropic API)</td><td>Fast (~500ms), cheap (~$0.001/turn), tool use</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ========================================= -->
+  <h2>Hackathon Schedule</h2>
+
+  <div class="timeline">
+    <div class="timeline-item">
+      <h4>Hour 1 &mdash; Foundation (0:00&ndash;1:00)</h4>
+      <ul class="checklist">
+        <li>FastAPI backend skeleton with CORS</li>
+        <li>Next.js frontend with CesiumJS globe</li>
+        <li>Chat interface component (text input + message history)</li>
+        <li>Click-to-select location + radius on map</li>
+        <li>DEM tile fetching and decoding from AWS</li>
+        <li>Basic API: POST location &rarr; elevation data</li>
+      </ul>
+    </div>
+    <div class="timeline-item">
+      <h4>Hour 2 &mdash; Terrain Analysis (1:00&ndash;2:00)</h4>
+      <ul class="checklist">
+        <li>Slope and curvature computation (NumPy)</li>
+        <li>Peak, ridge, cliff, water extraction</li>
+        <li>Interest map with configurable weights</li>
+        <li>Scene grouping (cluster nearby features)</li>
+      </ul>
+    </div>
+    <div class="timeline-item">
+      <h4>Hour 3 &mdash; Camera Computation + Scoring (2:00&ndash;3:00)</h4>
+      <ul class="checklist">
+        <li>Ridgeline fractal dim at multiple scales &rarr; optimal viewing distance</li>
+        <li>Composition templates (thirds, golden ratio, leading line, symmetry)</li>
+        <li>Inverse PnP solver for camera pose</li>
+        <li>Feasibility validation (underground, line-of-sight)</li>
+        <li>Fast proxy beauty scoring (viewshed, entropy, skyline fractal dim, prospect-refuge)</li>
+        <li>API: POST location + filters &rarr; ranked cameras</li>
+      </ul>
+    </div>
+    <div class="timeline-item">
+      <h4>Hour 4 &mdash; Rendering + Lighting + Scoring (3:00&ndash;4:00)</h4>
+      <ul class="checklist">
+        <li>CesiumJS headless rendering via Puppeteer</li>
+        <li>LAION Aesthetics + CACNet composition verification</li>
+        <li>Optimal lighting time (sun positions + DEM shadow casting)</li>
+        <li>CMA-ES refinement on top candidates</li>
+        <li>Results gallery UI with score breakdowns + best time of day</li>
+        <li>Drone export: Litchi CSV with GPS/altitude/heading/pitch</li>
+      </ul>
+    </div>
+    <div class="timeline-item">
+      <h4>Hour 5 &mdash; Style Ref + Agent + Enhancement + Polish (4:00&ndash;5:00)</h4>
+      <ul class="checklist">
+        <li>Agent tool definitions + Claude Haiku integration (Anthropic API)</li>
+        <li>NL &rarr; filter config (agent interprets user requests into pipeline params)</li>
+        <li>Result description generation (photographer-friendly narratives)</li>
+        <li>Nano Banana 2 photorealistic enhancement</li>
+        <li>Style reference upload + HED fingerprinting</li>
+        <li>Contour topology matching on DEM patches</li>
+        <li>Deterministic camera from surface normals</li>
+        <li>Gradient refinement on fingerprint similarity</li>
+        <li>Demo polish and presentation prep</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ========================================= -->
+  <h2>Key Research</h2>
+
+  <table>
+    <thead><tr><th>Paper</th><th>Year</th><th>Relevance</th></tr></thead>
+    <tbody>
+      <tr><td>Bratkova et al. &mdash; Automatic Views of Natural Scenes</td><td>2009</td><td>Most direct precedent. Energy minimization over USGS terrain.</td></tr>
+      <tr><td>V&aacute;zquez et al. &mdash; Viewpoint Entropy</td><td>2001</td><td>Information-theoretic viewpoint quality.</td></tr>
+      <tr><td>3D View Optimization &mdash; CMA-ES</td><td>2024</td><td>CMA-ES beats gradient descent 3&times; for camera pose.</td></tr>
+      <tr><td>3D Aesthetic Field</td><td>2025</td><td>Coarse-to-fine with gradient refinement. State of the art.</td></tr>
+      <tr><td>Sprott &mdash; Universal Aesthetic of Fractals</td><td>2003</td><td>Fractal dimension &asymp; 1.3 as beauty predictor.</td></tr>
+      <tr><td>Schirpke et al. &mdash; Scenic Beauty of Mountains</td><td>2013</td><td>GIS scenic beauty model (R&sup2;=0.72).</td></tr>
+      <tr><td>CACNet (CVPR)</td><td>2021</td><td>Classifies 13 composition types.</td></tr>
+      <tr><td>LAION Aesthetics Predictor</td><td>2022</td><td>Lightweight neural beauty score.</td></tr>
+      <tr><td>Appleton &mdash; Prospect-Refuge Theory</td><td>1975</td><td>Evolutionary basis for landscape preference.</td></tr>
+      <tr><td>Kaplan &amp; Kaplan &mdash; Experience of Nature</td><td>1989</td><td>Coherence, complexity, legibility, mystery.</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ========================================= -->
+  <h2>Stretch Goals</h2>
+
+  <ul>
+    <li><strong>Seasonal previews</strong> &mdash; same angle in fall foliage, snow, spring bloom via Earth Engine temporal imagery.</li>
+    <li><strong>Astrophotography mode</strong> &mdash; factor in light pollution (VIIRS data) and Milky Way position.</li>
+    <li><strong>Waterfall finder</strong> &mdash; streams crossing high-slope cells = likely waterfall.</li>
+    <li><strong>Reflection scoring</strong> &mdash; camera near water level + mountain behind lake = reflection opportunity.</li>
+    <li><strong>AR guide mode</strong> &mdash; phone GPS + compass overlays ideal composition grid on live camera view.</li>
+    <li><strong>Community feedback</strong> &mdash; photographers upload actual shots at suggested angles, improving the algorithm.</li>
+  </ul>
+
+</div>
+
+<div class="footer">
+  smallworld &middot; built at a hackathon
+</div>
+
+</body>
+</html>

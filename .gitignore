@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.env
+node_modules/
+.next/
+*.egg-info/
+dist/
+build/
+.DS_Store
+backend/static/renders/
+backend/terrain_cache/
