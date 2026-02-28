@@ -8,6 +8,7 @@ dependencies = [
     "uvicorn[standard]>=0.34",
     "httpx>=0.28",
     "numpy>=2.0",
+    "scipy>=1.14",
     "pillow>=11.0",
     "pydantic-settings>=2.7",
 ]

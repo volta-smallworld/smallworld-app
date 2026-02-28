@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import {
   Viewer,
   Cartesian2,
@@ -12,28 +12,37 @@ import {
   Cartographic,
   Math as CesiumMath,
   ImageryLayer,
+  Entity,
 } from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 import { initCesium, createOsmImageryProvider } from "@/lib/cesium";
-import { LatLng } from "@/types/terrain";
+import {
+  LatLng,
+  AnalysisOverlayKey,
+  TerrainAnalysisResponse,
+} from "@/types/terrain";
 
 interface CesiumMapProps {
   center: LatLng | null;
   radiusMeters: number;
   onSelectCenter: (latlng: LatLng) => void;
+  analysisResult: TerrainAnalysisResponse | null;
+  overlays: Record<AnalysisOverlayKey, boolean>;
 }
 
 export default function CesiumMap({
   center,
   radiusMeters,
   onSelectCenter,
+  analysisResult,
+  overlays,
 }: CesiumMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
-  const markerRef = useRef<any>(null);
-  const ellipseRef = useRef<any>(null);
+  const markerRef = useRef<Entity | null>(null);
+  const ellipseRef = useRef<Entity | null>(null);
+  const overlayEntitiesRef = useRef<Entity[]>([]);
 
-  // Store latest props in refs for the click handler
   const onSelectCenterRef = useRef(onSelectCenter);
   onSelectCenterRef.current = onSelectCenter;
 
@@ -85,7 +94,6 @@ export default function CesiumMap({
     const viewer = viewerRef.current;
     if (!viewer) return;
 
-    // Remove old entities
     if (markerRef.current) {
       viewer.entities.remove(markerRef.current);
       markerRef.current = null;
@@ -121,6 +129,111 @@ export default function CesiumMap({
       },
     });
   }, [center, radiusMeters]);
+
+  // Render analysis overlays
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    // Remove old overlay entities
+    for (const entity of overlayEntitiesRef.current) {
+      viewer.entities.remove(entity);
+    }
+    overlayEntitiesRef.current = [];
+
+    if (!analysisResult) return;
+
+    const { features, hotspots } = analysisResult;
+    const newEntities: Entity[] = [];
+
+    // Peaks — yellow points
+    if (overlays.peaks) {
+      for (const peak of features.peaks) {
+        const e = viewer.entities.add({
+          position: Cartesian3.fromDegrees(peak.center.lng, peak.center.lat),
+          point: {
+            pixelSize: 8,
+            color: Color.YELLOW,
+            outlineColor: Color.BLACK,
+            outlineWidth: 1,
+          },
+        });
+        newEntities.push(e);
+      }
+    }
+
+    // Ridges — gold polylines
+    if (overlays.ridges) {
+      for (const ridge of features.ridges) {
+        if (ridge.path.length < 2) continue;
+        const positions = ridge.path.map((p) =>
+          Cartesian3.fromDegrees(p.lng, p.lat)
+        );
+        const e = viewer.entities.add({
+          polyline: {
+            positions,
+            width: 2 as any,
+            material: Color.fromCssColorString("#d97706") as any,
+            clampToGround: true as any,
+          },
+        });
+        newEntities.push(e);
+      }
+    }
+
+    // Cliffs — orange points
+    if (overlays.cliffs) {
+      for (const cliff of features.cliffs) {
+        const e = viewer.entities.add({
+          position: Cartesian3.fromDegrees(cliff.center.lng, cliff.center.lat),
+          point: {
+            pixelSize: 7,
+            color: Color.ORANGE,
+            outlineColor: Color.BLACK,
+            outlineWidth: 1,
+          },
+        });
+        newEntities.push(e);
+      }
+    }
+
+    // Water channels — blue polylines
+    if (overlays.waterChannels) {
+      for (const ch of features.waterChannels) {
+        if (ch.path.length < 2) continue;
+        const positions = ch.path.map((p) =>
+          Cartesian3.fromDegrees(p.lng, p.lat)
+        );
+        const e = viewer.entities.add({
+          polyline: {
+            positions,
+            width: 2 as any,
+            material: Color.fromCssColorString("#3b82f6") as any,
+            clampToGround: true as any,
+          },
+        });
+        newEntities.push(e);
+      }
+    }
+
+    // Hotspots — cyan points
+    if (overlays.hotspots) {
+      for (const hs of hotspots) {
+        const e = viewer.entities.add({
+          position: Cartesian3.fromDegrees(hs.center.lng, hs.center.lat),
+          point: {
+            pixelSize: 12,
+            color: Color.CYAN.withAlpha(0.8),
+            outlineColor: Color.WHITE,
+            outlineWidth: 2,
+          },
+        });
+        newEntities.push(e);
+      }
+    }
+
+    overlayEntitiesRef.current = newEntities;
+  }, [analysisResult, overlays]);
 
   return (
     <div

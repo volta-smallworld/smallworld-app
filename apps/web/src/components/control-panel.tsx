@@ -1,12 +1,37 @@
 "use client";
 
-import { LatLng, TerrainFetchState } from "@/types/terrain";
+import {
+  LatLng,
+  AnalysisWeights,
+  AnalysisOverlayKey,
+  TerrainFetchState,
+} from "@/types/terrain";
+
+const WEIGHT_KEYS: { key: keyof AnalysisWeights; label: string }[] = [
+  { key: "peaks", label: "Peaks" },
+  { key: "ridges", label: "Ridges" },
+  { key: "cliffs", label: "Cliffs" },
+  { key: "water", label: "Water" },
+  { key: "relief", label: "Relief" },
+];
+
+const OVERLAY_KEYS: { key: AnalysisOverlayKey; label: string; color: string }[] = [
+  { key: "peaks", label: "Peaks", color: "#eab308" },
+  { key: "ridges", label: "Ridges", color: "#d97706" },
+  { key: "cliffs", label: "Cliffs", color: "#f97316" },
+  { key: "waterChannels", label: "Water", color: "#3b82f6" },
+  { key: "hotspots", label: "Hotspots", color: "#06b6d4" },
+];
 
 interface ControlPanelProps {
   center: LatLng | null;
   radiusMeters: number;
   onRadiusChange: (radius: number) => void;
-  onFetchTerrain: () => void;
+  weights: AnalysisWeights;
+  onWeightsChange: (weights: AnalysisWeights) => void;
+  overlays: Record<AnalysisOverlayKey, boolean>;
+  onToggleOverlay: (key: AnalysisOverlayKey) => void;
+  onAnalyze: () => void;
   fetchState: TerrainFetchState;
 }
 
@@ -14,14 +39,18 @@ export default function ControlPanel({
   center,
   radiusMeters,
   onRadiusChange,
-  onFetchTerrain,
+  weights,
+  onWeightsChange,
+  overlays,
+  onToggleOverlay,
+  onAnalyze,
   fetchState,
 }: ControlPanelProps) {
   const radiusKm = (radiusMeters / 1000).toFixed(1);
 
   return (
     <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 16 }}>
-      <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Terrain Selection</h2>
+      <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Terrain Analysis</h2>
 
       <div>
         <label style={{ fontSize: 13, color: "#888" }}>Selected Point</label>
@@ -60,8 +89,64 @@ export default function ControlPanel({
         </div>
       </div>
 
+      {/* Weight sliders */}
+      <div>
+        <div style={{ fontSize: 13, color: "#888", marginBottom: 6 }}>Weights</div>
+        {WEIGHT_KEYS.map(({ key, label }) => (
+          <div key={key} style={{ marginBottom: 6 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: 12,
+                color: "#aaa",
+              }}
+            >
+              <span>{label}</span>
+              <span style={{ fontFamily: "monospace" }}>{weights[key].toFixed(2)}</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={2}
+              step={0.25}
+              value={weights[key]}
+              onChange={(e) =>
+                onWeightsChange({ ...weights, [key]: Number(e.target.value) })
+              }
+              style={{ width: "100%", marginTop: 2 }}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Overlay toggles */}
+      <div>
+        <div style={{ fontSize: 13, color: "#888", marginBottom: 6 }}>Overlays</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {OVERLAY_KEYS.map(({ key, label, color }) => (
+            <button
+              key={key}
+              onClick={() => onToggleOverlay(key)}
+              style={{
+                padding: "4px 10px",
+                fontSize: 12,
+                fontWeight: 500,
+                border: `1px solid ${color}`,
+                borderRadius: 4,
+                cursor: "pointer",
+                backgroundColor: overlays[key] ? color : "transparent",
+                color: overlays[key] ? "#000" : color,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <button
-        onClick={onFetchTerrain}
+        onClick={onAnalyze}
         disabled={!center || fetchState === "loading"}
         style={{
           padding: "10px 16px",
@@ -74,7 +159,7 @@ export default function ControlPanel({
           cursor: !center || fetchState === "loading" ? "not-allowed" : "pointer",
         }}
       >
-        {fetchState === "loading" ? "Fetching..." : "Fetch Terrain"}
+        {fetchState === "loading" ? "Analyzing..." : "Analyze Terrain"}
       </button>
     </div>
   );

@@ -1,5 +1,6 @@
 import io
 import math
+from dataclasses import dataclass
 
 import httpx
 import numpy as np
@@ -108,10 +109,21 @@ def compute_cell_size_meters(bounds: GeoBounds, grid_size: int) -> float:
     return round(avg_span / grid_size, 1)
 
 
-async def get_elevation_grid(
+@dataclass
+class DEMSnapshot:
+    """Raw DEM grid with metadata — shared between elevation-grid and analysis."""
+
+    dem: np.ndarray  # 128x128 elevation in meters
+    bounds: GeoBounds
+    tile_coords: list[tuple[int, int, int]]
+    zoom: int
+    cell_size_meters: float
+
+
+async def fetch_dem_snapshot(
     lat: float, lng: float, radius_m: float, zoom: int | None = None
-) -> dict:
-    """Full pipeline: center+radius -> bounds -> tiles -> fetch -> decode -> resample -> stats."""
+) -> DEMSnapshot:
+    """Fetch tiles, decode, stitch, crop, and resample into a 128x128 DEM grid."""
     zoom = zoom or settings.default_terrarium_zoom
     target_bounds = center_radius_to_bounds(lat, lng, radius_m)
     tile_range = bounds_to_tile_range(target_bounds, zoom)
@@ -128,31 +140,46 @@ async def get_elevation_grid(
 
     grid = crop_and_resample(mosaic, mosaic_bounds, target_bounds, GRID_SIZE)
 
-    elevations = np.round(grid, 1).tolist()
+    return DEMSnapshot(
+        dem=grid,
+        bounds=target_bounds,
+        tile_coords=tile_range.tile_coords(),
+        zoom=zoom,
+        cell_size_meters=compute_cell_size_meters(target_bounds, GRID_SIZE),
+    )
+
+
+async def get_elevation_grid(
+    lat: float, lng: float, radius_m: float, zoom: int | None = None
+) -> dict:
+    """Full pipeline: center+radius -> bounds -> tiles -> fetch -> decode -> resample -> stats."""
+    snap = await fetch_dem_snapshot(lat, lng, radius_m, zoom)
+
+    elevations = np.round(snap.dem, 1).tolist()
 
     return {
         "request": {
             "center": {"lat": lat, "lng": lng},
             "radiusMeters": radius_m,
-            "zoomUsed": zoom,
+            "zoomUsed": snap.zoom,
         },
         "bounds": {
-            "north": round(target_bounds.north, 6),
-            "south": round(target_bounds.south, 6),
-            "east": round(target_bounds.east, 6),
-            "west": round(target_bounds.west, 6),
+            "north": round(snap.bounds.north, 6),
+            "south": round(snap.bounds.south, 6),
+            "east": round(snap.bounds.east, 6),
+            "west": round(snap.bounds.west, 6),
         },
         "grid": {
             "width": GRID_SIZE,
             "height": GRID_SIZE,
-            "cellSizeMetersApprox": compute_cell_size_meters(target_bounds, GRID_SIZE),
+            "cellSizeMetersApprox": snap.cell_size_meters,
             "elevations": elevations,
         },
-        "tiles": [{"z": z, "x": x, "y": y} for z, x, y in tile_range.tile_coords()],
+        "tiles": [{"z": z, "x": x, "y": y} for z, x, y in snap.tile_coords],
         "stats": {
-            "minElevation": round(float(np.min(grid)), 1),
-            "maxElevation": round(float(np.max(grid)), 1),
-            "meanElevation": round(float(np.mean(grid)), 1),
+            "minElevation": round(float(np.min(snap.dem)), 1),
+            "maxElevation": round(float(np.max(snap.dem)), 1),
+            "meanElevation": round(float(np.mean(snap.dem)), 1),
         },
         "source": "aws-terrarium",
     }
