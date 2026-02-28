@@ -9,6 +9,11 @@ from smallworld_api.models.terrain import (
     TerrainAnalysisRequest,
     TerrainAnalysisResponse,
 )
+from smallworld_api.models.viewpoints import (
+    ViewpointSearchRequest,
+    ViewpointSearchResponse,
+)
+from smallworld_api.services.viewpoints import generate_viewpoints
 from smallworld_api.services.analysis import (
     DEFAULT_ANALYSIS_WEIGHTS,
     build_interest_raster,
@@ -160,5 +165,96 @@ async def analyze_terrain(req: TerrainAnalysisRequest):
         "hotspots": hotspots,
         "scenes": scenes,
         "tiles": [{"z": z, "x": x, "y": y} for z, x, y in snap.tile_coords],
+        "source": "aws-terrarium",
+    }
+
+
+@router.post("/viewpoints", response_model=ViewpointSearchResponse)
+async def find_viewpoints(req: ViewpointSearchRequest):
+    weights = req.weights or AnalysisWeights()
+    weights_dict = {
+        "peaks": weights.peaks,
+        "ridges": weights.ridges,
+        "cliffs": weights.cliffs,
+        "water": weights.water,
+        "relief": weights.relief,
+    }
+
+    try:
+        snap = await fetch_dem_snapshot(
+            lat=req.center.lat,
+            lng=req.center.lng,
+            radius_m=req.radiusMeters,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Upstream tile fetch failed: {e.response.status_code}",
+        )
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Upstream tile fetch failed: {e}",
+        )
+
+    dem = snap.dem
+    cell_size = snap.cell_size_meters
+    bounds = snap.bounds
+
+    # Recompute hour-two derivatives and features
+    slope = compute_slope_degrees(dem, cell_size)
+    curvature = compute_profile_curvature(dem, cell_size)
+    relief = compute_local_relief(dem)
+
+    peaks = extract_peaks(dem, bounds)
+    ridges = extract_ridges(dem, bounds, cell_size)
+    cliffs = extract_cliffs(slope, curvature, bounds, dem)
+    water_channels = extract_water_channels(dem, bounds, cell_size)
+
+    interest = build_interest_raster(
+        dem, relief, curvature, peaks, ridges, cliffs, water_channels, bounds, weights_dict
+    )
+
+    layer_contribs = build_layer_contributions(
+        dem, relief, curvature, peaks, ridges, cliffs, water_channels, bounds
+    )
+    hotspots = extract_hotspots(interest, bounds, weights_dict, layer_contribs)
+
+    all_features = {
+        "peaks": peaks,
+        "ridges": ridges,
+        "cliffs": cliffs,
+        "waterChannels": water_channels,
+    }
+    scenes = group_scenes(hotspots, all_features)
+
+    compositions_str = [c.value for c in req.compositions]
+
+    result = generate_viewpoints(
+        dem=dem,
+        bounds=bounds,
+        cell_size_meters=cell_size,
+        scenes=scenes,
+        all_features=all_features,
+        interest_raster=interest,
+        compositions=compositions_str,
+        max_viewpoints=req.maxViewpoints,
+        max_per_scene=req.maxPerScene,
+    )
+
+    return {
+        "request": {
+            "center": {"lat": req.center.lat, "lng": req.center.lng},
+            "radiusMeters": req.radiusMeters,
+            "zoomUsed": snap.zoom,
+            "weights": weights_dict,
+            "compositions": compositions_str,
+            "maxViewpoints": req.maxViewpoints,
+            "maxPerScene": req.maxPerScene,
+        },
+        "summary": result["summary"],
+        "viewpoints": result["viewpoints"],
         "source": "aws-terrarium",
     }

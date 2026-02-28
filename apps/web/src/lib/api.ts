@@ -3,6 +3,8 @@ import {
   ElevationGridResponse,
   TerrainAnalysisRequest,
   TerrainAnalysisResponse,
+  ViewpointSearchRequest,
+  ViewpointSearchResponse,
 } from "@/types/terrain";
 
 const API_BASE_URL =
@@ -28,6 +30,22 @@ export async function analyzeTerrain(
   req: TerrainAnalysisRequest
 ): Promise<TerrainAnalysisResponse> {
   const resp = await fetch(`${API_BASE_URL}/api/v1/terrain/analyze`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+  });
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => null);
+    const detail = body?.detail || resp.statusText;
+    throw new Error(`API error ${resp.status}: ${detail}`);
+  }
+  return resp.json();
+}
+
+export async function findViewpoints(
+  req: ViewpointSearchRequest
+): Promise<ViewpointSearchResponse> {
+  const resp = await fetch(`${API_BASE_URL}/api/v1/terrain/viewpoints`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),

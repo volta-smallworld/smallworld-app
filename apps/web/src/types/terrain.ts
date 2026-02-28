@@ -146,4 +146,92 @@ export type AnalysisOverlayKey =
   | "ridges"
   | "cliffs"
   | "waterChannels"
-  | "hotspots";
+  | "hotspots"
+  | "viewpoints";
+
+// ── Viewpoint types (hour-three) ──────────────────────────────────────────────
+
+export type CompositionType = "ruleOfThirds" | "goldenRatio" | "leadingLine" | "symmetry";
+
+export type ViewpointFetchState = "idle" | "loading" | "success" | "error";
+
+export interface ViewpointSearchRequest {
+  center: LatLng;
+  radiusMeters: number;
+  weights?: AnalysisWeights;
+  compositions?: CompositionType[];
+  maxViewpoints?: number;
+  maxPerScene?: number;
+}
+
+export interface CameraPose {
+  lat: number;
+  lng: number;
+  altitudeMeters: number;
+  headingDegrees: number;
+  pitchDegrees: number;
+  rollDegrees: number;
+  fovDegrees: number;
+}
+
+export interface ViewpointTarget {
+  featureId: string;
+  role: string;
+  xNorm: number;
+  yNorm: number;
+}
+
+export interface ViewpointScoreBreakdown {
+  viewshedRichness: number;
+  terrainEntropy: number;
+  skylineFractal: number;
+  prospectRefuge: number;
+  depthLayering: number;
+  mystery: number;
+  waterVisibility: number;
+}
+
+export interface RankedViewpoint {
+  id: string;
+  sceneId: string;
+  sceneType: string;
+  composition: CompositionType;
+  camera: CameraPose;
+  targets: ViewpointTarget[];
+  distanceMetersApprox: number;
+  score: number;
+  scoreBreakdown: ViewpointScoreBreakdown;
+  validation: {
+    clearanceMeters: number;
+    visibleTargetIds: string[];
+  };
+}
+
+export interface ViewpointSearchSummary {
+  sceneCount: number;
+  eligibleSceneCount: number;
+  candidatesGenerated: number;
+  candidatesRejected: {
+    templateIneligible: number;
+    noConvergence: number;
+    underground: number;
+    occluded: number;
+    outOfBounds: number;
+  };
+  returned: number;
+}
+
+export interface ViewpointSearchResponse {
+  request: {
+    center: LatLng;
+    radiusMeters: number;
+    zoomUsed: number;
+    weights: AnalysisWeights;
+    compositions: CompositionType[];
+    maxViewpoints: number;
+    maxPerScene: number;
+  };
+  summary: ViewpointSearchSummary;
+  viewpoints: RankedViewpoint[];
+  source: string;
+}

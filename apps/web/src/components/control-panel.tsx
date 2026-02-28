@@ -5,6 +5,8 @@ import {
   AnalysisWeights,
   AnalysisOverlayKey,
   TerrainFetchState,
+  CompositionType,
+  ViewpointFetchState,
 } from "@/types/terrain";
 
 const WEIGHT_KEYS: { key: keyof AnalysisWeights; label: string }[] = [
@@ -21,6 +23,14 @@ const OVERLAY_KEYS: { key: AnalysisOverlayKey; label: string; color: string }[] 
   { key: "cliffs", label: "Cliffs", color: "#f97316" },
   { key: "waterChannels", label: "Water", color: "#3b82f6" },
   { key: "hotspots", label: "Hotspots", color: "#06b6d4" },
+  { key: "viewpoints", label: "Viewpoints", color: "#d946ef" },
+];
+
+const COMPOSITION_OPTIONS: { key: CompositionType; label: string; color: string }[] = [
+  { key: "ruleOfThirds", label: "Rule of 3rds", color: "#10b981" },
+  { key: "goldenRatio", label: "Golden Ratio", color: "#f59e0b" },
+  { key: "leadingLine", label: "Leading Line", color: "#8b5cf6" },
+  { key: "symmetry", label: "Symmetry", color: "#ec4899" },
 ];
 
 interface ControlPanelProps {
@@ -33,6 +43,10 @@ interface ControlPanelProps {
   onToggleOverlay: (key: AnalysisOverlayKey) => void;
   onAnalyze: () => void;
   fetchState: TerrainFetchState;
+  selectedCompositions: CompositionType[];
+  onCompositionsChange: (compositions: CompositionType[]) => void;
+  onFindViewpoints: () => void;
+  viewpointFetchState: ViewpointFetchState;
 }
 
 export default function ControlPanel({
@@ -45,6 +59,10 @@ export default function ControlPanel({
   onToggleOverlay,
   onAnalyze,
   fetchState,
+  selectedCompositions,
+  onCompositionsChange,
+  onFindViewpoints,
+  viewpointFetchState,
 }: ControlPanelProps) {
   const radiusKm = (radiusMeters / 1000).toFixed(1);
 
@@ -160,6 +178,63 @@ export default function ControlPanel({
         }}
       >
         {fetchState === "loading" ? "Analyzing..." : "Analyze Terrain"}
+      </button>
+
+      {/* Composition selection */}
+      <div>
+        <div style={{ fontSize: 13, color: "#888", marginBottom: 6 }}>Compositions</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {COMPOSITION_OPTIONS.map(({ key, label, color }) => {
+            const active = selectedCompositions.includes(key);
+            return (
+              <button
+                key={key}
+                onClick={() => {
+                  if (active) {
+                    onCompositionsChange(selectedCompositions.filter((c) => c !== key));
+                  } else {
+                    onCompositionsChange([...selectedCompositions, key]);
+                  }
+                }}
+                style={{
+                  padding: "4px 10px",
+                  fontSize: 12,
+                  fontWeight: 500,
+                  border: `1px solid ${color}`,
+                  borderRadius: 4,
+                  cursor: "pointer",
+                  backgroundColor: active ? color : "transparent",
+                  color: active ? "#000" : color,
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <button
+        onClick={onFindViewpoints}
+        disabled={fetchState !== "success" || viewpointFetchState === "loading" || selectedCompositions.length === 0}
+        style={{
+          padding: "10px 16px",
+          fontSize: 14,
+          fontWeight: 600,
+          backgroundColor:
+            fetchState !== "success" || viewpointFetchState === "loading" || selectedCompositions.length === 0
+              ? "#444"
+              : "#059669",
+          color: "#fff",
+          border: "none",
+          borderRadius: 6,
+          cursor:
+            fetchState !== "success" || viewpointFetchState === "loading" || selectedCompositions.length === 0
+              ? "not-allowed"
+              : "pointer",
+        }}
+      >
+        {viewpointFetchState === "loading" ? "Finding Viewpoints..." : "Find Viewpoints"}
       </button>
     </div>
   );

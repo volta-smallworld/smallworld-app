@@ -20,6 +20,20 @@ class Settings(BaseSettings):
     default_terrarium_zoom: int = 12
     max_tiles_per_request: int = 36
 
+    # Viewpoint settings (hour-three)
+    viewpoint_max_returned: int = 12
+    viewpoint_max_per_scene: int = 3
+    viewpoint_default_fov_degrees: float = 55
+    viewpoint_min_clearance_meters: float = 2
+    viewpoint_dedup_distance_meters: float = 150
+    viewpoint_dedup_heading_degrees: float = 12
+    viewpoint_skyline_fd_target: float = 1.3
+    viewpoint_skyline_fd_sigma: float = 0.15
+    visibility_ray_count: int = 90
+    visibility_steps_per_ray: int = 40
+    ridge_fractal_scales_meters: str = "150,300,600,1200"
+    ridge_default_distance_multiplier: float = 2.5
+
     model_config = {"env_file": ".env"}
 
 

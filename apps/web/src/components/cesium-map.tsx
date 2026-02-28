@@ -20,6 +20,7 @@ import {
   LatLng,
   AnalysisOverlayKey,
   TerrainAnalysisResponse,
+  ViewpointSearchResponse,
 } from "@/types/terrain";
 
 interface CesiumMapProps {
@@ -28,6 +29,8 @@ interface CesiumMapProps {
   onSelectCenter: (latlng: LatLng) => void;
   analysisResult: TerrainAnalysisResponse | null;
   overlays: Record<AnalysisOverlayKey, boolean>;
+  viewpointResult: ViewpointSearchResponse | null;
+  selectedViewpointId: string | null;
 }
 
 export default function CesiumMap({
@@ -36,12 +39,15 @@ export default function CesiumMap({
   onSelectCenter,
   analysisResult,
   overlays,
+  viewpointResult,
+  selectedViewpointId,
 }: CesiumMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
   const markerRef = useRef<Entity | null>(null);
   const ellipseRef = useRef<Entity | null>(null);
   const overlayEntitiesRef = useRef<Entity[]>([]);
+  const viewpointEntitiesRef = useRef<Entity[]>([]);
 
   const onSelectCenterRef = useRef(onSelectCenter);
   onSelectCenterRef.current = onSelectCenter;
@@ -234,6 +240,59 @@ export default function CesiumMap({
 
     overlayEntitiesRef.current = newEntities;
   }, [analysisResult, overlays]);
+
+  // Render viewpoint overlays
+  useEffect(() => {
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+
+    // Remove old viewpoint entities
+    for (const entity of viewpointEntitiesRef.current) {
+      viewer.entities.remove(entity);
+    }
+    viewpointEntitiesRef.current = [];
+
+    if (!viewpointResult || !overlays.viewpoints) return;
+
+    const newEntities: Entity[] = [];
+
+    for (const vp of viewpointResult.viewpoints) {
+      const isSelected = vp.id === selectedViewpointId;
+      const position = Cartesian3.fromDegrees(vp.camera.lng, vp.camera.lat);
+
+      // Viewpoint marker — magenta point
+      const marker = viewer.entities.add({
+        position,
+        point: {
+          pixelSize: isSelected ? 14 : 10,
+          color: Color.MAGENTA,
+          outlineColor: isSelected ? Color.WHITE : Color.BLACK,
+          outlineWidth: isSelected ? 3 : 1,
+        },
+      });
+      newEntities.push(marker);
+
+      // Heading ray — 300m projected line in heading direction
+      const headingRad = (vp.camera.headingDegrees * Math.PI) / 180;
+      const rayLength = 300; // meters
+      const earthRadius = 6378137;
+      const latRad = (vp.camera.lat * Math.PI) / 180;
+      const endLat = vp.camera.lat + ((rayLength * Math.cos(headingRad)) / earthRadius) * (180 / Math.PI);
+      const endLng = vp.camera.lng + ((rayLength * Math.sin(headingRad)) / (earthRadius * Math.cos(latRad))) * (180 / Math.PI);
+
+      const ray = viewer.entities.add({
+        polyline: {
+          positions: [position, Cartesian3.fromDegrees(endLng, endLat)],
+          width: (isSelected ? 3 : 2) as any,
+          material: (isSelected ? Color.WHITE : Color.MAGENTA.withAlpha(0.7)) as any,
+          clampToGround: true as any,
+        },
+      });
+      newEntities.push(ray);
+    }
+
+    viewpointEntitiesRef.current = newEntities;
+  }, [viewpointResult, selectedViewpointId, overlays]);
 
   return (
     <div

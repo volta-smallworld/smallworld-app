@@ -5,13 +5,17 @@ import { useState, useCallback } from "react";
 import ControlPanel from "@/components/control-panel";
 import TerrainResultPanel from "@/components/terrain-result-panel";
 import SceneList from "@/components/scene-list";
-import { analyzeTerrain } from "@/lib/api";
+import ViewpointList from "@/components/viewpoint-list";
+import { analyzeTerrain, findViewpoints } from "@/lib/api";
 import {
   LatLng,
   AnalysisWeights,
   AnalysisOverlayKey,
   TerrainAnalysisResponse,
   TerrainFetchState,
+  ViewpointSearchResponse,
+  ViewpointFetchState,
+  CompositionType,
   DEFAULT_WEIGHTS,
 } from "@/types/terrain";
 
@@ -39,6 +43,7 @@ const DEFAULT_OVERLAYS: Record<AnalysisOverlayKey, boolean> = {
   cliffs: false,
   waterChannels: true,
   hotspots: true,
+  viewpoints: true,
 };
 
 export default function Home() {
@@ -51,6 +56,11 @@ export default function Home() {
   const [fetchState, setFetchState] = useState<TerrainFetchState>("idle");
   const [result, setResult] = useState<TerrainAnalysisResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedCompositions, setSelectedCompositions] = useState<CompositionType[]>(["ruleOfThirds", "goldenRatio", "leadingLine", "symmetry"]);
+  const [viewpointFetchState, setViewpointFetchState] = useState<ViewpointFetchState>("idle");
+  const [viewpointResult, setViewpointResult] = useState<ViewpointSearchResponse | null>(null);
+  const [viewpointError, setViewpointError] = useState<string | null>(null);
+  const [selectedViewpointId, setSelectedViewpointId] = useState<string | null>(null);
 
   const handleSelectCenter = useCallback((latlng: LatLng) => {
     setCenter(latlng);
@@ -78,6 +88,30 @@ export default function Home() {
     setOverlays((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
 
+  const handleFindViewpoints = useCallback(async () => {
+    if (!center || fetchState !== "success") return;
+    setViewpointFetchState("loading");
+    setViewpointError(null);
+    setSelectedViewpointId(null);
+    try {
+      const data = await findViewpoints({
+        center,
+        radiusMeters,
+        weights,
+        compositions: selectedCompositions,
+      });
+      setViewpointResult(data);
+      setViewpointFetchState("success");
+    } catch (err) {
+      setViewpointError(err instanceof Error ? err.message : "Unknown error");
+      setViewpointFetchState("error");
+    }
+  }, [center, radiusMeters, weights, selectedCompositions, fetchState]);
+
+  const handleSelectViewpoint = useCallback((id: string) => {
+    setSelectedViewpointId((prev) => (prev === id ? null : id));
+  }, []);
+
   return (
     <div style={{ display: "flex", height: "100vh", width: "100vw" }}>
       {/* Left sidebar */}
@@ -101,6 +135,10 @@ export default function Home() {
           onToggleOverlay={handleToggleOverlay}
           onAnalyze={handleAnalyze}
           fetchState={fetchState}
+          selectedCompositions={selectedCompositions}
+          onCompositionsChange={setSelectedCompositions}
+          onFindViewpoints={handleFindViewpoints}
+          viewpointFetchState={viewpointFetchState}
         />
         <div style={{ borderTop: "1px solid #333" }}>
           <TerrainResultPanel
@@ -114,6 +152,20 @@ export default function Home() {
             <SceneList scenes={result.scenes} />
           </div>
         )}
+        {viewpointResult && viewpointFetchState === "success" && (
+          <div style={{ borderTop: "1px solid #333" }}>
+            <ViewpointList
+              viewpoints={viewpointResult.viewpoints}
+              selectedId={selectedViewpointId}
+              onSelect={handleSelectViewpoint}
+            />
+          </div>
+        )}
+        {viewpointFetchState === "error" && viewpointError && (
+          <div style={{ padding: 16, color: "#ef4444", fontSize: 13 }}>
+            Viewpoint error: {viewpointError}
+          </div>
+        )}
       </div>
 
       {/* Map */}
@@ -124,6 +176,8 @@ export default function Home() {
           onSelectCenter={handleSelectCenter}
           analysisResult={result}
           overlays={overlays}
+          viewpointResult={viewpointResult}
+          selectedViewpointId={selectedViewpointId}
         />
       </div>
     </div>
