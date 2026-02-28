@@ -17,6 +17,7 @@ dependencies = [
     "open-clip-torch>=2.24",
     "lpips>=0.1.4",
     "scikit-image>=0.22",
+    "fastmcp>=2.0",
 ]
 
 [tool.uv]

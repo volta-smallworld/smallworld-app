@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import time
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
@@ -22,235 +21,142 @@ from smallworld_api.models.previews import (
     SceneMetadata,
     TimingsMs,
 )
-from smallworld_api.services.composition_verifier import verify_composition
-from smallworld_api.services.preview_artifacts import (
-    artifact_url,
-    cleanup_expired,
-    ensure_preview_dir,
-    generate_preview_id,
-    get_artifact_path,
-    save_artifact,
-    save_manifest,
-    save_request,
-)
-from smallworld_api.services.preview_enhancement import (
-    DEFAULT_ENHANCEMENT_PROMPT,
-    EnhancementError,
-    EnhancementNotConfiguredError,
-    enhance_preview,
-)
-from smallworld_api.services.preview_renderer import (
-    RenderError,
-    RenderTimeoutError,
-    render_preview,
+from smallworld_api.services.preview_artifacts import get_artifact_path
+from smallworld_api.services.preview_renderer import RenderError, RenderTimeoutError
+from smallworld_api.services.previews import (
+    PreviewRendererNotConfiguredError,
+    render_preview_pipeline,
 )
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────
-
-
-def _heading_to_compass(heading: float) -> str:
-    directions = [
-        "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-        "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW",
-    ]
-    index = round(heading / 22.5) % 16
-    return directions[index]
-
-
-def _build_summary(req: PreviewRenderRequest, compass: str) -> str:
-    scene_type = req.scene.sceneType or "terrain"
-    template = req.composition.targetTemplate.value.replace("_", "-")
-    return (
-        f"{scene_type.capitalize()} preview facing {compass} at "
-        f"{req.camera.headingDeg:.0f} degrees with {template} framing."
-    )
-
-
-# ── Routes ────────────────────────────────────────────────────────────────
-
-
 @router.post("/render", response_model=PreviewRenderResponse)
 async def render_preview_endpoint(req: PreviewRenderRequest):
-    start_time = time.monotonic()
-    warnings: list[PreviewWarning] = []
+    # Convert anchors to dicts for the shared service
+    anchors_dicts = None
+    if req.composition.anchors:
+        anchors_dicts = [
+            {
+                "id": a.id,
+                "label": a.label,
+                "lat": a.lat,
+                "lng": a.lng,
+                "altMeters": a.altMeters,
+                "desiredNormalizedX": a.desiredNormalizedX,
+                "desiredNormalizedY": a.desiredNormalizedY,
+            }
+            for a in req.composition.anchors
+        ]
 
-    # 1. Check render backend configuration
-    if not settings.preview_renderer_base_url:
-        raise HTTPException(status_code=503, detail="Render backend not configured")
-
-    # 2. Best-effort cleanup of expired artifacts
     try:
-        cleanup_expired(
-            settings.preview_artifacts_dir, settings.preview_artifact_ttl_hours
-        )
-    except Exception:
-        logger.warning("Artifact cleanup failed", exc_info=True)
-
-    # 3. Allocate preview ID and directory
-    preview_id = generate_preview_id()
-    preview_dir = ensure_preview_dir(settings.preview_artifacts_dir, preview_id)
-
-    # 4. Save request for debugging
-    save_request(preview_dir, req.model_dump())
-
-    # 5. Run renderer
-    render_start = time.monotonic()
-    try:
-        render_result = await render_preview(
-            base_url=settings.preview_renderer_base_url,
+        result = await render_preview_pipeline(
             camera_lat=req.camera.position.lat,
             camera_lng=req.camera.position.lng,
-            camera_alt=req.camera.position.altMeters,
+            camera_alt_meters=req.camera.position.altMeters,
             heading_deg=req.camera.headingDeg,
             pitch_deg=req.camera.pitchDeg,
             roll_deg=req.camera.rollDeg,
             fov_deg=req.camera.fovDeg,
             viewport_width=req.viewport.width,
             viewport_height=req.viewport.height,
-            output_path=preview_dir / "raw.png",
-            timeout_seconds=settings.preview_render_timeout_seconds,
-            cesium_ion_token=settings.cesium_ion_token,
-            mapbox_access_token=settings.mapbox_access_token,
+            scene_center_lat=req.scene.center.lat,
+            scene_center_lng=req.scene.center.lng,
+            scene_radius_meters=req.scene.radiusMeters,
+            scene_id=req.scene.sceneId,
+            scene_type=req.scene.sceneType,
+            scene_summary=req.scene.sceneSummary,
+            feature_ids=req.scene.featureIds,
+            target_template=req.composition.targetTemplate.value,
+            subject_label=req.composition.subjectLabel,
+            horizon_ratio=req.composition.horizonRatio,
+            anchors=anchors_dicts,
+            enhancement_enabled=req.enhancement.enabled,
+            enhancement_prompt=req.enhancement.prompt,
         )
+    except PreviewRendererNotConfiguredError:
+        raise HTTPException(status_code=503, detail="Render backend not configured")
     except RenderTimeoutError:
         raise HTTPException(status_code=504, detail="Render timed out")
     except RenderError as e:
         raise HTTPException(status_code=502, detail=f"Render failed: {e}")
-    render_ms = int((time.monotonic() - render_start) * 1000)
 
-    # Persist raw artifact
-    raw_bytes = render_result.image_path.read_bytes()
-    save_artifact(preview_dir, "raw", raw_bytes)
-
-    # 6. Run composition verification
-    verification = verify_composition(
-        camera_lat=req.camera.position.lat,
-        camera_lng=req.camera.position.lng,
-        camera_alt_meters=req.camera.position.altMeters,
-        heading_deg=req.camera.headingDeg,
-        pitch_deg=req.camera.pitchDeg,
-        roll_deg=req.camera.rollDeg,
-        fov_deg=req.camera.fovDeg,
-        viewport_width=req.viewport.width,
-        viewport_height=req.viewport.height,
-        template=req.composition.targetTemplate,
-        anchors=req.composition.anchors,
-        horizon_ratio=req.composition.horizonRatio,
-    )
-
-    # 7. Run enhancement if requested
-    enhanced_image: ImageArtifact | None = None
-    enhancement_ms: int | None = None
-    status = "completed"
-
-    if req.enhancement.enabled:
-        enhancement_start = time.monotonic()
-        prompt = req.enhancement.prompt or DEFAULT_ENHANCEMENT_PROMPT
-        try:
-            enhancement_result = await enhance_preview(
-                raw_image_path=render_result.image_path,
-                output_path=preview_dir / "enhanced.png",
-                prompt=prompt,
-                api_key=settings.gemini_api_key,
-                model=settings.gemini_image_model,
-            )
-            enhanced_bytes = enhancement_result.image_path.read_bytes()
-            save_artifact(preview_dir, "enhanced", enhanced_bytes)
-            enhanced_image = ImageArtifact(
-                url=artifact_url(preview_id, "enhanced"),
-                width=req.viewport.width,
-                height=req.viewport.height,
-            )
-            enhancement_ms = int((time.monotonic() - enhancement_start) * 1000)
-        except EnhancementNotConfiguredError:
-            status = "completed_with_warnings"
-            warnings.append(
-                PreviewWarning(
-                    code="enhancement_not_configured",
-                    message="Enhancement is not configured. Set GEMINI_API_KEY and GEMINI_IMAGE_MODEL.",
-                )
-            )
-        except EnhancementError as e:
-            status = "completed_with_warnings"
-            warnings.append(
-                PreviewWarning(
-                    code="enhancement_failed",
-                    message=f"Enhancement failed: {e}",
-                )
-            )
-            enhancement_ms = int((time.monotonic() - enhancement_start) * 1000)
-
-    # 8. Build metadata
-    compass = _heading_to_compass(req.camera.headingDeg)
+    # Map pipeline result to REST response (camelCase)
+    cam = result.camera_metadata
+    loc = result.location_metadata
+    scene_meta = result.scene_metadata
+    comp_meta = result.composition_metadata
 
     metadata = PreviewMetadata(
         camera=CameraMetadata(
-            lat=req.camera.position.lat,
-            lng=req.camera.position.lng,
-            altMeters=req.camera.position.altMeters,
-            headingDeg=req.camera.headingDeg,
-            pitchDeg=req.camera.pitchDeg,
-            rollDeg=req.camera.rollDeg,
-            fovDeg=req.camera.fovDeg,
-            compassDirection=compass,
+            lat=cam["lat"],
+            lng=cam["lng"],
+            altMeters=cam["alt_meters"],
+            headingDeg=cam["heading_deg"],
+            pitchDeg=cam["pitch_deg"],
+            rollDeg=cam["roll_deg"],
+            fovDeg=cam["fov_deg"],
+            compassDirection=cam["compass_direction"],
         ),
         location=LocationMetadata(
             sceneCenter={
-                "lat": req.scene.center.lat,
-                "lng": req.scene.center.lng,
+                "lat": loc["scene_center"]["lat"],
+                "lng": loc["scene_center"]["lng"],
             },
-            radiusMeters=req.scene.radiusMeters,
-            googleMapsUrl=(
-                f"https://www.google.com/maps/search/?api=1"
-                f"&query={req.scene.center.lat},{req.scene.center.lng}"
-            ),
-            geoUri=f"geo:{req.scene.center.lat},{req.scene.center.lng}",
+            radiusMeters=loc["radius_meters"],
+            googleMapsUrl=loc["google_maps_url"],
+            geoUri=loc["geo_uri"],
         ),
         scene=SceneMetadata(
-            sceneId=req.scene.sceneId,
-            sceneType=req.scene.sceneType,
-            sceneSummary=req.scene.sceneSummary,
-            featureIds=req.scene.featureIds,
+            sceneId=scene_meta["scene_id"],
+            sceneType=scene_meta["scene_type"],
+            sceneSummary=scene_meta["scene_summary"],
+            featureIds=scene_meta["feature_ids"],
         ),
         composition=CompositionMetadata(
             target=CompositionTarget(
-                template=req.composition.targetTemplate.value,
-                subjectLabel=req.composition.subjectLabel,
-                horizonRatio=req.composition.horizonRatio,
+                template=comp_meta["target"]["template"],
+                subjectLabel=comp_meta["target"]["subject_label"],
+                horizonRatio=comp_meta["target"]["horizon_ratio"],
             ),
-            verified=verification,
+            verified=result.verification,
         ),
-        summary=_build_summary(req, compass),
+        summary=result.summary,
     )
 
-    total_ms = int((time.monotonic() - start_time) * 1000)
+    raw_image = None
+    if result.raw_artifact:
+        raw_image = ImageArtifact(
+            url=result.raw_artifact.relative_url,
+            width=result.raw_artifact.width,
+            height=result.raw_artifact.height,
+        )
 
-    # 9. Build and save response
-    response = PreviewRenderResponse(
-        id=preview_id,
-        status=status,
-        warnings=warnings,
-        rawImage=ImageArtifact(
-            url=artifact_url(preview_id, "raw"),
-            width=req.viewport.width,
-            height=req.viewport.height,
-        ),
+    enhanced_image = None
+    if result.enhanced_artifact:
+        enhanced_image = ImageArtifact(
+            url=result.enhanced_artifact.relative_url,
+            width=result.enhanced_artifact.width,
+            height=result.enhanced_artifact.height,
+        )
+
+    return PreviewRenderResponse(
+        id=result.preview_id,
+        status=result.status,
+        warnings=[
+            PreviewWarning(code=w.code, message=w.message)
+            for w in result.warnings
+        ],
+        rawImage=raw_image,
         enhancedImage=enhanced_image,
         metadata=metadata,
         timingsMs=TimingsMs(
-            render=render_ms,
-            enhancement=enhancement_ms,
-            total=total_ms,
+            render=result.timings_ms.get("render"),
+            enhancement=result.timings_ms.get("enhancement"),
+            total=result.timings_ms["total"],
         ),
     )
-
-    save_manifest(preview_dir, response.model_dump())
-
-    return response
 
 
 @router.get("/{preview_id}/artifacts/{variant}")

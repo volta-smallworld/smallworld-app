@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     cesium_ion_token: str = ""
     mapbox_access_token: str = ""
 
+    # ── Preview public URL (for MCP artifact URLs) ──────────────────────
+    preview_public_base_url: str = ""
+
     # ── Enhancement (Gemini) ──────────────────────────────────────────────
     gemini_api_key: str = ""
     gemini_image_model: str = ""
