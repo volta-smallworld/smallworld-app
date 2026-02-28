@@ -5,6 +5,9 @@
     "dev:web": "pnpm --filter @smallworld/web dev",
     "dev:api": "cd apps/api && uv run uvicorn smallworld_api.main:app --reload --host 0.0.0.0 --port 8000",
     "lint:web": "pnpm --filter @smallworld/web lint",
-    "test:api": "cd apps/api && uv run pytest"
+    "test:api": "cd apps/api && uv run pytest",
+    "dev:mcp": "cd apps/api && uv run python -m smallworld_api.mcp.cli",
+    "dev:mcp:http": "cd apps/api && uv run python -m smallworld_api.mcp.cli --transport http",
+    "test:mcp": "cd apps/api && uv run pytest tests/test_mcp*.py -v"
   }
 }

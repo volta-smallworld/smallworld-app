@@ -64,29 +64,34 @@ def _mock_enhancement_result():
     )
 
 
+# Patches now target the services.previews module where the functions
+# are actually looked up at runtime (after the route→service refactor).
+_SVC = "smallworld_api.services.previews"
+
+
 def _patch_all():
-    """Return a stack of patches for the route's dependencies."""
+    """Return a stack of patches for the service pipeline's dependencies."""
     return [
         patch(
-            "smallworld_api.routes.previews.render_preview",
+            f"{_SVC}._render_preview",
             new_callable=AsyncMock,
             return_value=_mock_render_result(),
         ),
         patch(
-            "smallworld_api.routes.previews.enhance_preview",
+            f"{_SVC}._enhance_preview",
             new_callable=AsyncMock,
             return_value=_mock_enhancement_result(),
         ),
         patch(
-            "smallworld_api.routes.previews.ensure_preview_dir",
+            f"{_SVC}.ensure_preview_dir",
             return_value=Path("/tmp/test"),
         ),
-        patch("smallworld_api.routes.previews.save_artifact"),
-        patch("smallworld_api.routes.previews.save_manifest"),
-        patch("smallworld_api.routes.previews.save_request"),
-        patch("smallworld_api.routes.previews.cleanup_expired"),
+        patch(f"{_SVC}.save_artifact"),
+        patch(f"{_SVC}.save_manifest"),
+        patch(f"{_SVC}.save_request"),
+        patch(f"{_SVC}.cleanup_expired"),
         patch(
-            "smallworld_api.routes.previews.generate_preview_id",
+            f"{_SVC}.generate_preview_id",
             return_value="preview_test123",
         ),
         patch.object(Path, "read_bytes", return_value=b"fakepng"),
@@ -172,7 +177,7 @@ def test_invalid_radius():
 def test_enhancement_failure_still_returns_200():
     patches = _patch_all()
     mocks = _apply_patches(patches)
-    # mocks[1] is enhance_preview
+    # mocks[1] is _enhance_preview
     mocks[1].side_effect = EnhancementError("Failed")
     try:
         resp = client.post("/api/v1/previews/render", json=VALID_REQUEST)
@@ -203,15 +208,15 @@ def test_enhancement_not_configured_returns_200():
 
 
 @patch(
-    "smallworld_api.routes.previews.render_preview",
+    f"{_SVC}._render_preview",
     new_callable=AsyncMock,
     side_effect=RenderTimeoutError("timeout"),
 )
-@patch("smallworld_api.routes.previews.ensure_preview_dir", return_value=Path("/tmp/test"))
-@patch("smallworld_api.routes.previews.save_request")
-@patch("smallworld_api.routes.previews.cleanup_expired")
+@patch(f"{_SVC}.ensure_preview_dir", return_value=Path("/tmp/test"))
+@patch(f"{_SVC}.save_request")
+@patch(f"{_SVC}.cleanup_expired")
 @patch(
-    "smallworld_api.routes.previews.generate_preview_id",
+    f"{_SVC}.generate_preview_id",
     return_value="preview_test123",
 )
 def test_render_timeout_returns_504(_gen, _clean, _save, _dir, _render):
@@ -220,15 +225,15 @@ def test_render_timeout_returns_504(_gen, _clean, _save, _dir, _render):
 
 
 @patch(
-    "smallworld_api.routes.previews.render_preview",
+    f"{_SVC}._render_preview",
     new_callable=AsyncMock,
     side_effect=RenderError("crash"),
 )
-@patch("smallworld_api.routes.previews.ensure_preview_dir", return_value=Path("/tmp/test"))
-@patch("smallworld_api.routes.previews.save_request")
-@patch("smallworld_api.routes.previews.cleanup_expired")
+@patch(f"{_SVC}.ensure_preview_dir", return_value=Path("/tmp/test"))
+@patch(f"{_SVC}.save_request")
+@patch(f"{_SVC}.cleanup_expired")
 @patch(
-    "smallworld_api.routes.previews.generate_preview_id",
+    f"{_SVC}.generate_preview_id",
     return_value="preview_test123",
 )
 def test_render_error_returns_502(_gen, _clean, _save, _dir, _render):
