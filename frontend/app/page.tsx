@@ -176,7 +176,14 @@ export default function Home() {
             <span className="location-name">{locationName}</span>
           </div>
           <div className="globe-container">
-            <Globe lat={searchCenter.lat} lng={searchCenter.lng} />
+            <Globe
+              lat={searchCenter.lat}
+              lng={searchCenter.lng}
+              onLocationChange={(lat, lng) => {
+                setSearchCenter({ lat, lng });
+                setLocationName(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+              }}
+            />
           </div>
         </div>
 

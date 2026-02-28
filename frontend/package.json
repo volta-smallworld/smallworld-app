@@ -9,11 +9,14 @@
   },
   "dependencies": {
     "cobe": "^0.6.5",
+    "globe.gl": "^2.45.0",
     "leaflet": "^1.9.4",
+    "maplibre-gl": "^5.19.0",
     "next": "^14.2.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
-    "react-leaflet": "^4.2.1"
+    "react-leaflet": "^4.2.1",
+    "three": "^0.183.2"
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.12",
