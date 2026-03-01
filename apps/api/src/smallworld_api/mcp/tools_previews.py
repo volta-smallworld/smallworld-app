@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
+
+from fastmcp.tools.tool import ToolResult
+from fastmcp.utilities.types import Image as McpImage
 
 from smallworld_api.config import settings
 from smallworld_api.mcp.schemas import (
@@ -34,7 +39,8 @@ async def preview_render_pose(
     composition: dict,
     viewport: dict | None = None,
     enhancement: dict | None = None,
-) -> dict:
+    include_images: bool = False,
+) -> dict | ToolResult:
     """Render a preview image from an explicit camera pose.
 
     Use viewpoints[n].preview_input from terrain_find_viewpoints as input.
@@ -46,7 +52,11 @@ async def preview_render_pose(
         scene: Scene context with center (lat, lng), radius_meters, scene_id, scene_type
         composition: Composition with target_template, subject_label, horizon_ratio, anchors
         viewport: Optional viewport override with width and height
-        enhancement: Optional enhancement override with enabled flag and prompt
+        enhancement: Optional enhancement override with enabled flag and prompt.
+            The prompt field is for **creative direction only** — describe lighting,
+            atmosphere, season, time of day, and mood. Terrain-fidelity guardrails
+            are prepended automatically so the prompt should NOT include instructions
+            about preserving terrain or geography.
     """
     # Parse and validate input via Pydantic
     cam = McpCameraPose(**camera)
@@ -63,7 +73,7 @@ async def preview_render_pose(
     if comp.anchors:
         anchors_dicts = [
             {
-                "id": a.id,
+                "id": a.id or f"anchor-{idx + 1}",
                 "label": a.label,
                 "lat": a.lat,
                 "lng": a.lng,
@@ -71,7 +81,7 @@ async def preview_render_pose(
                 "desired_normalized_x": a.desired_normalized_x,
                 "desired_normalized_y": a.desired_normalized_y,
             }
-            for a in comp.anchors
+            for idx, a in enumerate(comp.anchors)
         ]
 
     try:
@@ -150,4 +160,28 @@ async def preview_render_pose(
         manifest_path=result.manifest_path,
     )
 
-    return output.model_dump()
+    if not include_images:
+        return output.model_dump()
+
+    # Build content blocks: JSON text + inline image(s)
+    output_payload = output.model_dump()
+    content_items: list = []
+    content_items.append(json.dumps(output_payload, indent=2, default=str))
+
+    content_items.append(
+        McpImage(data=Path(result.raw_artifact.local_path).read_bytes(), format="png")
+    )
+    if result.enhanced_artifact:
+        content_items.append(
+            McpImage(
+                data=Path(result.enhanced_artifact.local_path).read_bytes(),
+                format="png",
+            )
+        )
+
+    # Return ToolResult with both content blocks and structured output
+    # so FastMCP output-schema validation passes.
+    return ToolResult(
+        content=content_items,
+        structured_content={"result": output_payload},
+    )

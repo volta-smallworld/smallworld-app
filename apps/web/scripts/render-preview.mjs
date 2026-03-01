@@ -14,6 +14,14 @@
 
 import puppeteer from "puppeteer";
 
+const NEXT_DEV_OVERLAY_HIDE_CSS = `
+  nextjs-portal,
+  [data-nextjs-toast],
+  script[data-nextjs-dev-overlay="true"] {
+    display: none !important;
+  }
+`;
+
 // ---------------------------------------------------------------------------
 // CLI argument parsing (no external deps)
 // ---------------------------------------------------------------------------
@@ -61,18 +69,20 @@ async function main() {
   let browser;
   try {
     browser = await puppeteer.launch({
-      headless: true,
+      headless: "new",
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
-        "--disable-gpu",
         "--disable-dev-shm-usage",
+        "--enable-webgl",
+        "--ignore-gpu-blocklist",
       ],
     });
 
     const page = await browser.newPage();
     await page.setViewport({ width, height });
-    await page.goto(url, { waitUntil: "networkidle0", timeout });
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout });
+    await page.addStyleTag({ content: NEXT_DEV_OVERLAY_HIDE_CSS });
 
     // Wait for the render page to signal readiness
     await page.waitForFunction(

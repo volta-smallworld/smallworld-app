@@ -55,7 +55,7 @@ async def terrain_analyze_area(
 
     try:
         snap = await fetch_dem_snapshot(
-            lat=inp.lat, lng=inp.lng, radius_m=inp.radius_meters,
+            lat=inp.lat, lng=inp.lng, radius_m=inp.radius_meters, zoom=inp.zoom,
         )
     except ValueError as e:
         raise ValueError(f"Invalid terrain request: {e}")

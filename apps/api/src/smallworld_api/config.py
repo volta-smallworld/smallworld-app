@@ -1,5 +1,12 @@
+from pathlib import Path
+
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
+
+
+_CONFIG_FILE = Path(__file__).resolve()
+_API_ROOT = _CONFIG_FILE.parents[2]
+_REPO_ROOT = _CONFIG_FILE.parents[4]
 
 
 class Settings(BaseSettings):
@@ -46,13 +53,14 @@ class Settings(BaseSettings):
     # ── External provider tokens ──────────────────────────────────────────
     cesium_ion_token: str = ""
     mapbox_access_token: str = ""
+    google_maps_api_key: str = ""
 
     # ── Preview public URL (for MCP artifact URLs) ──────────────────────
     preview_public_base_url: str = ""
 
     # ── Enhancement (Gemini) ──────────────────────────────────────────────
     gemini_api_key: str = ""
-    gemini_image_model: str = ""
+    gemini_image_model: str = "gemini-3.1-flash-image-preview"
 
     # ── Style Reference ────────────────────────────────────────────────
     style_artifacts_dir: str = ".style_artifacts"
@@ -69,7 +77,12 @@ class Settings(BaseSettings):
     style_hed_prototxt_path: str = ""
     style_hed_weights_path: str = ""
 
-    model_config = {"env_file": ".env"}
+    model_config = {
+        "env_file": (
+            str(_REPO_ROOT / ".env"),
+            str(_API_ROOT / ".env"),
+        )
+    }
 
 
 settings = Settings()

@@ -22,6 +22,13 @@ const RENDER_HEIGHT = parseInt(
   process.env.PREVIEW_RENDER_HEIGHT || "720",
   10
 );
+const NEXT_DEV_OVERLAY_HIDE_CSS = `
+  nextjs-portal,
+  [data-nextjs-toast],
+  script[data-nextjs-dev-overlay="true"] {
+    display: none !important;
+  }
+`;
 
 let browserInstance: Browser | null = null;
 let renderInProgress = false;
@@ -84,6 +91,7 @@ async function doRender(params: RenderParams): Promise<Buffer> {
       waitUntil: "domcontentloaded",
       timeout: RENDER_TIMEOUT,
     });
+    await page.addStyleTag({ content: NEXT_DEV_OVERLAY_HIDE_CSS });
 
     // Wait for the ready marker
     await page.waitForFunction(

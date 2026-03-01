@@ -697,12 +697,7 @@ def generate_viewpoints(
             candidates.append(candidate)
 
     # ------------------------------------------------------------------
-    # 8. Deduplicate
-    # ------------------------------------------------------------------
-    candidates = _deduplicate(candidates, dedup_distance, dedup_heading)
-
-    # ------------------------------------------------------------------
-    # 9. Score each candidate
+    # 8. Score each candidate
     # ------------------------------------------------------------------
     from smallworld_api.services.visibility import score_viewpoint
 
@@ -723,6 +718,17 @@ def generate_viewpoints(
         cand["scoreBreakdown"] = {
             k: round(v, 4) for k, v in score_result.items() if k != "total"
         }
+
+    # Pre-sort by score so dedup keeps the best candidate
+    candidates.sort(key=lambda c: -c["score"])
+
+    # Track pre-dedup count for metrics
+    pre_dedup_count = len(candidates)
+
+    # ------------------------------------------------------------------
+    # 9. Deduplicate
+    # ------------------------------------------------------------------
+    candidates = _deduplicate(candidates, dedup_distance, dedup_heading)
 
     # ------------------------------------------------------------------
     # 10. Sort by score desc, then scene score desc, then id asc
@@ -758,7 +764,7 @@ def generate_viewpoints(
     for vp in limited:
         vp.pop("_sceneScore", None)
 
-    candidates_generated = len(candidates) + sum(rejections.values())
+    candidates_generated = pre_dedup_count + sum(rejections.values())
 
     return {
         "viewpoints": limited,

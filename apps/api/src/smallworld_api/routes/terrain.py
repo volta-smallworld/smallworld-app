@@ -2,6 +2,7 @@ import httpx
 import numpy as np
 from fastapi import APIRouter, HTTPException
 
+from smallworld_api.config import settings
 from smallworld_api.models.terrain import (
     AnalysisWeights,
     ElevationGridRequest,
@@ -242,6 +243,10 @@ async def find_viewpoints(req: ViewpointSearchRequest):
         compositions=compositions_str,
         max_viewpoints=req.maxViewpoints,
         max_per_scene=req.maxPerScene,
+        fov_degrees=settings.viewpoint_default_fov_degrees,
+        min_clearance=settings.viewpoint_min_clearance_meters,
+        dedup_distance=settings.viewpoint_dedup_distance_meters,
+        dedup_heading=settings.viewpoint_dedup_heading_degrees,
     )
 
     return {

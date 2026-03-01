@@ -4,14 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Run Commands
 
+**Always use the Makefile** for starting, stopping, and managing the dev stack. If a Makefile target doesn't exist for what you need, add one. Use `/usr/bin/make` (the shell has a `make` autoload function that shadows it).
+
 ```bash
+# Dev stack (preferred — manages all services with PID tracking)
+/usr/bin/make up                # Start API (:8080), MCP (:8001), Web (:3000) in background
+/usr/bin/make down              # Stop all services
+/usr/bin/make restart           # Stop + start all services
+/usr/bin/make status            # Show which services are running
+/usr/bin/make logs              # Tail all log files (.logs/)
+
+# Individual services
+/usr/bin/make up-api            # Start API only
+/usr/bin/make up-mcp            # Start MCP only
+/usr/bin/make up-web            # Start Web only
+/usr/bin/make down-api          # Stop API only
+/usr/bin/make down-mcp          # Stop MCP only
+/usr/bin/make down-web          # Stop Web only
+
 # Install dependencies
 pnpm install                    # Web (from repo root)
 cd apps/api && uv sync          # API
-
-# Development servers (run in separate terminals)
-pnpm dev:api                    # FastAPI on http://localhost:8000
-pnpm dev:web                    # Next.js on http://localhost:3000
 
 # Testing
 pnpm test:api                   # All backend tests
@@ -49,7 +62,7 @@ Monorepo with two independent apps — no shared packages or cross-app imports. 
 - **Tile cap**: max 36 tiles per request (configurable via `MAX_TILES_PER_REQUEST` env var) — returns 422 if exceeded
 - **Grid size**: always 128×128, hardcoded in `terrarium.py` as `GRID_SIZE`
 - **Zoom level**: default 12, configurable via `DEFAULT_TERRARIUM_ZOOM` env var
-- Web reads `NEXT_PUBLIC_API_BASE_URL` (defaults to `http://localhost:8000`); API reads `.env` via pydantic-settings
+- Web reads `NEXT_PUBLIC_API_BASE_URL` (defaults to `http://localhost:8080`); API reads `.env` via pydantic-settings
 
 ## Testing Patterns
 

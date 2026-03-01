@@ -24,9 +24,9 @@ from smallworld_api.services.preview_artifacts import (
     save_request,
 )
 from smallworld_api.services.preview_enhancement import (
-    DEFAULT_ENHANCEMENT_PROMPT,
     EnhancementError,
     EnhancementNotConfiguredError,
+    build_enhancement_prompt,
     enhance_preview as _enhance_preview,
 )
 from smallworld_api.services.preview_renderer import (
@@ -86,6 +86,31 @@ def _heading_to_compass(heading: float) -> str:
     ]
     index = round(heading / 22.5) % 16
     return directions[index]
+
+
+def _build_failure_manifest(
+    *,
+    preview_id: str,
+    error: Exception,
+    warnings: list[PreviewWarningItem],
+    total_ms: int,
+    render_attempts: list[dict],
+) -> dict:
+    return {
+        "id": preview_id,
+        "status": "failed",
+        "warnings": [{"code": w.code, "message": w.message} for w in warnings],
+        "error": {
+            "type": error.__class__.__name__,
+            "message": str(error),
+        },
+        "timings_ms": {
+            "render": None,
+            "enhancement": None,
+            "total": total_ms,
+        },
+        "render_attempts": render_attempts,
+    }
 
 
 # ── Pipeline ─────────────────────────────────────────────────────────────
@@ -172,25 +197,98 @@ async def render_preview_pipeline(
         "enhancement": {"enabled": enhancement_enabled},
     })
 
-    # 5. Run renderer
-    render_start = time.monotonic()
-    render_result = await _render_preview(
-        base_url=settings.preview_renderer_base_url,
-        camera_lat=camera_lat,
-        camera_lng=camera_lng,
-        camera_alt=camera_alt_meters,
-        heading_deg=heading_deg,
-        pitch_deg=pitch_deg,
-        roll_deg=roll_deg,
-        fov_deg=fov_deg,
-        viewport_width=width,
-        viewport_height=height,
-        output_path=preview_dir / "raw.png",
-        timeout_seconds=settings.preview_render_timeout_seconds,
-        cesium_ion_token=settings.cesium_ion_token,
-        mapbox_access_token=settings.mapbox_access_token,
-    )
-    render_ms = int((time.monotonic() - render_start) * 1000)
+    # 5. Run renderer, retrying without Google 3D if the first attempt fails.
+    render_attempts: list[dict] = []
+    render_ms: int | None = None
+    render_result = None
+    render_configs = [
+        {
+            "label": "default",
+            "google_maps_api_key": settings.google_maps_api_key,
+        }
+    ]
+    if settings.google_maps_api_key:
+        render_configs.append(
+            {
+                "label": "retry_without_google_3d",
+                "google_maps_api_key": "",
+            }
+        )
+
+    last_render_error: RenderTimeoutError | RenderError | None = None
+    for attempt_index, render_cfg in enumerate(render_configs):
+        render_start = time.monotonic()
+        try:
+            render_result = await _render_preview(
+                base_url=settings.preview_renderer_base_url,
+                camera_lat=camera_lat,
+                camera_lng=camera_lng,
+                camera_alt=camera_alt_meters,
+                heading_deg=heading_deg,
+                pitch_deg=pitch_deg,
+                roll_deg=roll_deg,
+                fov_deg=fov_deg,
+                viewport_width=width,
+                viewport_height=height,
+                output_path=preview_dir / "raw.png",
+                timeout_seconds=settings.preview_render_timeout_seconds,
+                cesium_ion_token=settings.cesium_ion_token,
+                mapbox_access_token=settings.mapbox_access_token,
+                google_maps_api_key=render_cfg["google_maps_api_key"],
+            )
+            render_ms = int((time.monotonic() - render_start) * 1000)
+            render_attempts.append(
+                {
+                    "attempt": attempt_index + 1,
+                    "mode": render_cfg["label"],
+                    "used_google_3d": bool(render_cfg["google_maps_api_key"]),
+                    "status": "succeeded",
+                    "duration_ms": render_ms,
+                }
+            )
+            if attempt_index > 0:
+                warnings.append(
+                    PreviewWarningItem(
+                        code="render_fallback_without_google_3d",
+                        message="Google 3D rendering failed, so the preview was retried without Google 3D tiles.",
+                    )
+                )
+            break
+        except (RenderTimeoutError, RenderError) as exc:
+            duration_ms = int((time.monotonic() - render_start) * 1000)
+            render_attempts.append(
+                {
+                    "attempt": attempt_index + 1,
+                    "mode": render_cfg["label"],
+                    "used_google_3d": bool(render_cfg["google_maps_api_key"]),
+                    "status": "failed",
+                    "duration_ms": duration_ms,
+                    "error": str(exc),
+                }
+            )
+            last_render_error = exc
+            logger.warning(
+                "Preview render attempt %s failed for %s: %s",
+                attempt_index + 1,
+                preview_id,
+                exc,
+            )
+            continue
+
+    if render_result is None:
+        assert last_render_error is not None
+        total_ms = int((time.monotonic() - start_time) * 1000)
+        save_manifest(
+            preview_dir,
+            _build_failure_manifest(
+                preview_id=preview_id,
+                error=last_render_error,
+                warnings=warnings,
+                total_ms=total_ms,
+                render_attempts=render_attempts,
+            ),
+        )
+        raise last_render_error
 
     # Persist raw artifact
     raw_bytes = render_result.image_path.read_bytes()
@@ -231,10 +329,14 @@ async def render_preview_pipeline(
             ))
 
     # Map template string to CompositionTemplate enum
+    # Supports both snake_case (from REST) and camelCase (from MCP conversion)
     template_map = {
         "rule_of_thirds": RestCompositionTemplate.RULE_OF_THIRDS,
+        "ruleOfThirds": RestCompositionTemplate.RULE_OF_THIRDS,
         "golden_ratio": RestCompositionTemplate.GOLDEN_RATIO,
+        "goldenRatio": RestCompositionTemplate.GOLDEN_RATIO,
         "leading_line": RestCompositionTemplate.LEADING_LINE,
+        "leadingLine": RestCompositionTemplate.LEADING_LINE,
         "symmetry": RestCompositionTemplate.SYMMETRY,
         "custom": RestCompositionTemplate.CUSTOM,
     }
@@ -258,11 +360,11 @@ async def render_preview_pipeline(
     # 7. Run enhancement if requested
     enhanced_artifact: ArtifactInfo | None = None
     enhancement_ms: int | None = None
-    status = "completed"
+    status = "completed_with_warnings" if warnings else "completed"
 
     if enhancement_enabled:
         enhancement_start = time.monotonic()
-        prompt = enhancement_prompt or DEFAULT_ENHANCEMENT_PROMPT
+        prompt = build_enhancement_prompt(enhancement_prompt)
         try:
             enhancement_result = await _enhance_preview(
                 raw_image_path=render_result.image_path,

@@ -17,6 +17,8 @@ import {
   initCesium,
   createPrimaryTerrainProvider,
   createPrimaryImageryProvider,
+  hasGoogle3DTilesSupport,
+  createGoogle3DTileset,
 } from "@/lib/cesium";
 import {
   LatLng,
@@ -86,6 +88,18 @@ export default function CesiumMap({
       // Replace default imagery with the capability-aware provider
       viewer.imageryLayers.removeAll();
       viewer.imageryLayers.addImageryProvider(imageryProvider);
+
+      // Load Google Photorealistic 3D Tiles when available
+      if (hasGoogle3DTilesSupport()) {
+        try {
+          const tileset = await createGoogle3DTileset();
+          if (!destroyed) {
+            viewer.scene.primitives.add(tileset);
+          }
+        } catch (e) {
+          console.warn("Failed to load Google 3D Tiles:", e);
+        }
+      }
 
       viewerRef.current = viewer;
 

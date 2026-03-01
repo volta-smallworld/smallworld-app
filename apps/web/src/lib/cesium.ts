@@ -1,6 +1,7 @@
 import {
   Ion,
   CesiumTerrainProvider,
+  Cesium3DTileset,
   IonImageryProvider,
   OpenStreetMapImageryProvider,
 } from "cesium";
@@ -38,6 +39,38 @@ export function initCesium() {
 }
 
 // ---------------------------------------------------------------------------
+// Google Maps API key
+// ---------------------------------------------------------------------------
+
+function getGoogleMapsApiKey(): string {
+  return process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
+}
+
+/**
+ * Returns `true` when a Google Maps API key is available, enabling
+ * Google Photorealistic 3D Tiles for realistic terrain + imagery.
+ */
+export function hasGoogle3DTilesSupport(): boolean {
+  return getGoogleMapsApiKey().length > 0;
+}
+
+/**
+ * Create a Google Photorealistic 3D Tileset.  The tileset includes geometry,
+ * terrain, and photorealistic textures — no separate terrain or imagery
+ * provider is needed when this is active.
+ */
+export async function createGoogle3DTileset(
+  apiKey?: string,
+): Promise<Cesium3DTileset> {
+  const key = apiKey || getGoogleMapsApiKey();
+  if (!key) {
+    throw new Error("Google Maps API key is required for 3D tiles");
+  }
+  const url = `https://tile.googleapis.com/v1/3dtiles/root.json?key=${key}`;
+  return Cesium3DTileset.fromUrl(url);
+}
+
+// ---------------------------------------------------------------------------
 // Capability detection
 // ---------------------------------------------------------------------------
 
@@ -66,15 +99,12 @@ export function createOsmImageryProvider() {
 /**
  * Primary imagery provider used during normal map interaction.
  *
- * - **Ion token set** -> Bing Maps aerial via `IonImageryProvider` (asset 2).
- * - **No token**      -> OpenStreetMap tiles.
+ * Always uses OpenStreetMap tiles to keep the interactive map token-free.
+ * Ion imagery is only used in preview/scene-generation via createPreviewImageryProvider.
  */
 export async function createPrimaryImageryProvider(): Promise<
   IonImageryProvider | OpenStreetMapImageryProvider
 > {
-  if (hasPreviewTerrainSupport()) {
-    return IonImageryProvider.fromAssetId(2);
-  }
   return createOsmImageryProvider();
 }
 
@@ -101,17 +131,13 @@ export async function createPreviewImageryProvider(): Promise<
 /**
  * Primary terrain provider for normal map interaction.
  *
- * - **Ion token set** -> Cesium World Terrain via `CesiumTerrainProvider`
- *   (asset 1).
- * - **No token**      -> `undefined` (the viewer falls back to the WGS84
- *   ellipsoid).
+ * Always returns undefined to keep the interactive map token-free (uses the WGS84
+ * ellipsoid). Ion terrain is only used in preview/scene-generation via
+ * createPreviewTerrainProvider.
  */
 export async function createPrimaryTerrainProvider(): Promise<
   CesiumTerrainProvider | undefined
 > {
-  if (hasPreviewTerrainSupport()) {
-    return CesiumTerrainProvider.fromIonAssetId(1);
-  }
   return undefined;
 }
 

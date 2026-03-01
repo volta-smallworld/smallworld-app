@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from heapq import heappop, heappush
 import math
 
 import numpy as np
@@ -17,6 +18,8 @@ FLOW_MIN_ACCUMULATION_CELLS = 24
 MAX_FEATURES_PER_KIND = 25
 MAX_PATH_VERTICES = 24
 MIN_PATH_CELLS = 5
+MIN_PATH_SMOOTH_VERTICES = 10
+PATH_SMOOTH_SIGMA_CELLS = 1.0
 EIGHT_CONNECTED = ndimage.generate_binary_structure(2, 2)
 
 # ── Coordinate helpers ───────────────────────────────────────────────────────
@@ -112,6 +115,135 @@ def _d8_accumulation(flow_dir: np.ndarray) -> np.ndarray:
 # ── Connected-component path tracing ────────────────────────────────────────
 
 
+def _build_component_adjacency(coords: np.ndarray) -> dict[tuple[int, int], list[tuple[int, int]]]:
+    """Build 8-neighbor adjacency for a connected component."""
+    component = {(int(r), int(c)) for r, c in coords}
+    adjacency: dict[tuple[int, int], list[tuple[int, int]]] = {}
+    for r, c in component:
+        neighbors: list[tuple[int, int]] = []
+        for dr, dc in _D8_OFFSETS:
+            candidate = (r + dr, c + dc)
+            if candidate in component:
+                neighbors.append(candidate)
+        adjacency[(r, c)] = neighbors
+    return adjacency
+
+
+def _farthest_cell(origin: tuple[int, int], cells: np.ndarray) -> tuple[int, int]:
+    """Return the cell farthest (Euclidean) from origin."""
+    dr = cells[:, 0] - origin[0]
+    dc = cells[:, 1] - origin[1]
+    idx = int(np.argmax(dr * dr + dc * dc))
+    return (int(cells[idx, 0]), int(cells[idx, 1]))
+
+
+def _pick_component_endpoints(
+    adjacency: dict[tuple[int, int], list[tuple[int, int]]]
+) -> tuple[tuple[int, int], tuple[int, int]]:
+    """Pick stable endpoints for tracing the principal path through a component."""
+    all_cells = np.array(list(adjacency.keys()), dtype=np.int32)
+    endpoint_cells = np.array(
+        [cell for cell, neighbors in adjacency.items() if len(neighbors) <= 1], dtype=np.int32
+    )
+    candidates = endpoint_cells if len(endpoint_cells) >= 2 else all_cells
+
+    seed_idx = int(np.lexsort((candidates[:, 1], candidates[:, 0]))[0])
+    seed = (int(candidates[seed_idx, 0]), int(candidates[seed_idx, 1]))
+    start = _farthest_cell(seed, candidates)
+    end = _farthest_cell(start, candidates)
+
+    if start == end and len(candidates) > 1:
+        dr = candidates[:, 0] - start[0]
+        dc = candidates[:, 1] - start[1]
+        order = np.argsort(dr * dr + dc * dc)
+        second = candidates[int(order[-2])]
+        end = (int(second[0]), int(second[1]))
+
+    return start, end
+
+
+def _trace_component_path(coords: np.ndarray) -> np.ndarray:
+    """Trace a connected path across a component from one endpoint to the other."""
+    if len(coords) == 0:
+        return np.zeros((0, 2), dtype=np.float64)
+    if len(coords) == 1:
+        return np.array([[float(coords[0, 0]), float(coords[0, 1])]], dtype=np.float64)
+
+    adjacency = _build_component_adjacency(coords)
+    start, end = _pick_component_endpoints(adjacency)
+
+    if start == end:
+        return np.array([[float(start[0]), float(start[1])]], dtype=np.float64)
+
+    dist: dict[tuple[int, int], float] = {start: 0.0}
+    prev: dict[tuple[int, int], tuple[int, int]] = {}
+    heap: list[tuple[float, tuple[int, int]]] = [(0.0, start)]
+
+    while heap:
+        cur_dist, node = heappop(heap)
+        if cur_dist > dist.get(node, float("inf")):
+            continue
+        if node == end:
+            break
+        for nbr in adjacency[node]:
+            diagonal = nbr[0] != node[0] and nbr[1] != node[1]
+            step_cost = math.sqrt(2.0) if diagonal else 1.0
+            new_dist = cur_dist + step_cost
+            if new_dist < dist.get(nbr, float("inf")):
+                dist[nbr] = new_dist
+                prev[nbr] = node
+                heappush(heap, (new_dist, nbr))
+
+    if end not in dist:
+        # Fallback should be rare; component labeling implies connectivity.
+        return np.array([[float(start[0]), float(start[1])], [float(end[0]), float(end[1])]])
+
+    path: list[tuple[int, int]] = [end]
+    while path[-1] != start:
+        path.append(prev[path[-1]])
+    path.reverse()
+
+    return np.array([(float(r), float(c)) for r, c in path], dtype=np.float64)
+
+
+def _resample_path(path_rc: np.ndarray, max_vertices: int) -> np.ndarray:
+    """Resample polyline to a fixed vertex budget with arc-length interpolation."""
+    if len(path_rc) <= max_vertices:
+        return path_rc
+
+    seg_lengths = np.linalg.norm(np.diff(path_rc, axis=0), axis=1)
+    cumulative = np.concatenate(([0.0], np.cumsum(seg_lengths)))
+    total_length = float(cumulative[-1])
+
+    if total_length <= 1e-9:
+        idx = np.linspace(0, len(path_rc) - 1, max_vertices, dtype=int)
+        return path_rc[idx]
+
+    targets = np.linspace(0.0, total_length, max_vertices)
+    rows = np.interp(targets, cumulative, path_rc[:, 0])
+    cols = np.interp(targets, cumulative, path_rc[:, 1])
+    resampled = np.column_stack((rows, cols))
+    resampled[0] = path_rc[0]
+    resampled[-1] = path_rc[-1]
+    return resampled
+
+
+def _smooth_path(path_rc: np.ndarray) -> np.ndarray:
+    """Lightly smooth a traced path to reduce DEM cell stair-stepping artifacts."""
+    if len(path_rc) < MIN_PATH_SMOOTH_VERTICES:
+        return path_rc
+
+    smoothed = np.column_stack(
+        (
+            ndimage.gaussian_filter1d(path_rc[:, 0], sigma=PATH_SMOOTH_SIGMA_CELLS, mode="nearest"),
+            ndimage.gaussian_filter1d(path_rc[:, 1], sigma=PATH_SMOOTH_SIGMA_CELLS, mode="nearest"),
+        )
+    )
+    smoothed[0] = path_rc[0]
+    smoothed[-1] = path_rc[-1]
+    return smoothed
+
+
 def _mask_to_paths(
     mask: np.ndarray,
     bounds: GeoBounds,
@@ -128,13 +260,10 @@ def _mask_to_paths(
         coords = np.argwhere(labeled == label_id)
         if len(coords) < min_cells:
             continue
-        # Sort by row to get a rough top-to-bottom path
-        coords = coords[coords[:, 0].argsort()]
-        # Subsample
-        if len(coords) > max_vertices:
-            indices = np.linspace(0, len(coords) - 1, max_vertices, dtype=int)
-            coords = coords[indices]
-        path = [_grid_to_latlng(r, c, bounds, grid_h, grid_w) for r, c in coords]
+        traced = _trace_component_path(coords)
+        traced = _smooth_path(traced)
+        traced = _resample_path(traced, max_vertices)
+        path = [_grid_to_latlng(r, c, bounds, grid_h, grid_w) for r, c in traced]
         length_m = _path_length_meters(path, cell_size, grid_h, grid_w)
         paths.append({"path": path, "lengthMetersApprox": round(length_m)})
     return paths

@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useState, useCallback, useEffect, useRef } from "react";
 import ControlPanel from "@/components/control-panel";
 import TerrainResultPanel from "@/components/terrain-result-panel";
@@ -492,6 +493,24 @@ export default function Home() {
 
       {/* Map */}
       <div style={{ flex: 1, position: "relative" }}>
+        <Link
+          href="/chat"
+          style={{
+            position: "absolute",
+            top: 12,
+            right: 12,
+            zIndex: 10,
+            padding: "6px 14px",
+            borderRadius: 6,
+            background: "#3b82f6",
+            color: "white",
+            fontSize: 13,
+            fontWeight: 500,
+            textDecoration: "none",
+          }}
+        >
+          Chat
+        </Link>
         <CesiumMap
           center={center}
           radiusMeters={radiusMeters}

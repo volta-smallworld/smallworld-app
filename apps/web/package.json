@@ -10,11 +10,15 @@
     "render:preview": "node scripts/render-preview.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "cesium": "^1.124.0",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "resium": "^1.18.0"
+    "react-markdown": "^10.1.0",
+    "resium": "^1.18.0",
+    "zod": "3.25.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.4",
@@ -25,7 +29,7 @@
     "eslint": "^9.0.0",
     "eslint-config-next": "^15.1.0",
     "playwright": "^1.58.2",
-    "puppeteer": "^23.0.0",
+    "puppeteer": "^23.11.1",
     "typescript": "^5.7.0"
   }
 }

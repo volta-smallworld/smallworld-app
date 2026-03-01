@@ -27,7 +27,8 @@ class RenderTimeoutError(Exception):
 
 
 _SCRIPT_PATH = (
-    Path(__file__).resolve().parent.parent.parent.parent.parent
+    Path(__file__).resolve().parent.parent.parent.parent.parent.parent
+    / "apps"
     / "web"
     / "scripts"
     / "render-preview.mjs"
@@ -50,6 +51,7 @@ async def render_preview(
     timeout_seconds: int,
     cesium_ion_token: str = "",
     mapbox_access_token: str = "",
+    google_maps_api_key: str = "",
 ) -> RenderResult:
     payload = {
         "camera": {
@@ -67,6 +69,8 @@ async def render_preview(
         payload["cesiumIonToken"] = cesium_ion_token
     if mapbox_access_token:
         payload["mapboxAccessToken"] = mapbox_access_token
+    if google_maps_api_key:
+        payload["googleMapsApiKey"] = google_maps_api_key
 
     encoded = base64.urlsafe_b64encode(
         json.dumps(payload).encode()

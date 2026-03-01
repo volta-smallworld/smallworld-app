@@ -33,6 +33,8 @@ def server_info() -> str:
         "preview_capabilities": {
             "renderer_configured": bool(settings.preview_renderer_base_url),
             "enhancement_configured": bool(settings.gemini_api_key and settings.gemini_image_model),
+            "enhancement_model": settings.gemini_image_model or None,
+            "inline_images_supported": True,
             "artifact_url_base_configured": bool(settings.preview_public_base_url),
         },
     }
@@ -75,6 +77,11 @@ def usage_guidance() -> str:
             "preview_input is designed to be passed directly to preview_render_pose without transformation.",
             "Enhancement requires Gemini API credentials. If not configured, you still get the raw render.",
             "Compositions use snake_case: rule_of_thirds, golden_ratio, leading_line, symmetry.",
+            "preview_render_pose can render without anchors; missing anchor ids and normalized positions are inferred.",
+            "preview_render_pose returns metadata by default. Set include_images=true to embed inline images.",
+            "Terrain tools automatically reduce zoom when a large radius would exceed the tile cap. Check zoom_used in the response.",
+            "Craft a scene-specific enhancement prompt based on the terrain context (lighting, season, atmosphere, time of day). System guardrails protecting terrain fidelity are prepended automatically — your prompt only needs creative direction.",
+            "Enhancement requires GEMINI_API_KEY. Without a custom prompt the default creative prompt (golden hour, cinematic grading) is used.",
         ],
     }
     return json.dumps(guidance, indent=2)

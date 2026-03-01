@@ -207,11 +207,34 @@ def test_enhancement_not_configured_returns_200():
         _stop_patches(patches)
 
 
+def test_render_retries_without_google_3d_and_returns_warning():
+    from smallworld_api.config import settings
+
+    original_google_key = settings.google_maps_api_key
+    settings.google_maps_api_key = "test-google-key"
+
+    patches = _patch_all()
+    mocks = _apply_patches(patches)
+    mocks[0].side_effect = [RenderTimeoutError("timeout"), _mock_render_result()]
+    try:
+        resp = client.post("/api/v1/previews/render", json=VALID_REQUEST)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["status"] == "completed_with_warnings"
+        codes = [w["code"] for w in body["warnings"]]
+        assert "render_fallback_without_google_3d" in codes
+        assert mocks[0].await_count == 2
+    finally:
+        settings.google_maps_api_key = original_google_key
+        _stop_patches(patches)
+
+
 @patch(
     f"{_SVC}._render_preview",
     new_callable=AsyncMock,
     side_effect=RenderTimeoutError("timeout"),
 )
+@patch(f"{_SVC}.save_manifest")
 @patch(f"{_SVC}.ensure_preview_dir", return_value=Path("/tmp/test"))
 @patch(f"{_SVC}.save_request")
 @patch(f"{_SVC}.cleanup_expired")
@@ -219,9 +242,19 @@ def test_enhancement_not_configured_returns_200():
     f"{_SVC}.generate_preview_id",
     return_value="preview_test123",
 )
-def test_render_timeout_returns_504(_gen, _clean, _save, _dir, _render):
-    resp = client.post("/api/v1/previews/render", json=VALID_REQUEST)
-    assert resp.status_code == 504
+def test_render_timeout_returns_504_and_writes_failure_manifest(_gen, _clean, _save, _dir, mock_save_manifest, _render):
+    from smallworld_api.config import settings
+
+    original_google_key = settings.google_maps_api_key
+    settings.google_maps_api_key = ""
+    try:
+        resp = client.post("/api/v1/previews/render", json=VALID_REQUEST)
+        assert resp.status_code == 504
+        manifest = mock_save_manifest.call_args.args[1]
+        assert manifest["status"] == "failed"
+        assert manifest["error"]["type"] == "RenderTimeoutError"
+    finally:
+        settings.google_maps_api_key = original_google_key
 
 
 @patch(
@@ -229,6 +262,7 @@ def test_render_timeout_returns_504(_gen, _clean, _save, _dir, _render):
     new_callable=AsyncMock,
     side_effect=RenderError("crash"),
 )
+@patch(f"{_SVC}.save_manifest")
 @patch(f"{_SVC}.ensure_preview_dir", return_value=Path("/tmp/test"))
 @patch(f"{_SVC}.save_request")
 @patch(f"{_SVC}.cleanup_expired")
@@ -236,9 +270,16 @@ def test_render_timeout_returns_504(_gen, _clean, _save, _dir, _render):
     f"{_SVC}.generate_preview_id",
     return_value="preview_test123",
 )
-def test_render_error_returns_502(_gen, _clean, _save, _dir, _render):
-    resp = client.post("/api/v1/previews/render", json=VALID_REQUEST)
-    assert resp.status_code == 502
+def test_render_error_returns_502(_gen, _clean, _save, _dir, _mock_save_manifest, _render):
+    from smallworld_api.config import settings
+
+    original_google_key = settings.google_maps_api_key
+    settings.google_maps_api_key = ""
+    try:
+        resp = client.post("/api/v1/previews/render", json=VALID_REQUEST)
+        assert resp.status_code == 502
+    finally:
+        settings.google_maps_api_key = original_google_key
 
 
 def test_render_backend_not_configured():

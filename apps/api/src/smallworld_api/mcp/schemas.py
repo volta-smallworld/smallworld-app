@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 # ── Composition enum ─────────────────────────────────────────────────────
@@ -125,13 +125,27 @@ class McpValidation(BaseModel):
 
 
 class McpPreviewAnchor(BaseModel):
-    id: str
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str | None = None
     label: str | None = None
     lat: float
     lng: float
-    alt_meters: float
-    desired_normalized_x: float
-    desired_normalized_y: float
+    alt_meters: float = Field(
+        validation_alias=AliasChoices("alt_meters", "altMeters")
+    )
+    desired_normalized_x: float = Field(
+        default=0.5,
+        ge=0,
+        le=1,
+        validation_alias=AliasChoices("desired_normalized_x", "desiredNormalizedX"),
+    )
+    desired_normalized_y: float = Field(
+        default=0.5,
+        ge=0,
+        le=1,
+        validation_alias=AliasChoices("desired_normalized_y", "desiredNormalizedY"),
+    )
 
 
 class McpPreviewScene(BaseModel):
@@ -213,6 +227,7 @@ class PreviewRenderPoseInput(BaseModel):
     composition: McpPreviewComposition
     viewport: McpViewportSpec | None = Field(default=None, description="Viewport dimensions override")
     enhancement: McpEnhancementOptions | None = Field(default=None, description="Enhancement options override")
+    include_images: bool = Field(default=False, description="Include inline image data in response")
 
 
 class PreviewArtifactRef(BaseModel):

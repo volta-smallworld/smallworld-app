@@ -1,3 +1,4 @@
+import asyncio
 import io
 import math
 from dataclasses import dataclass
@@ -17,6 +18,7 @@ from smallworld_api.services.tiles import (
 
 TILE_SIZE = 256
 GRID_SIZE = 128
+TILE_FETCH_CONCURRENCY = 8
 
 
 def decode_terrarium(img: Image.Image) -> np.ndarray:
@@ -48,9 +50,19 @@ async def fetch_and_stitch(
     rows = tile_range.y_max - tile_range.y_min + 1
     mosaic = np.zeros((rows * TILE_SIZE, cols * TILE_SIZE), dtype=np.float64)
 
-    for z, x, y in tile_range.tile_coords():
-        img = await fetch_tile(client, z, x, y)
-        elev = decode_terrarium(img)
+    tile_coords = tile_range.tile_coords()
+    semaphore = asyncio.Semaphore(TILE_FETCH_CONCURRENCY)
+
+    async def _fetch_decode(z: int, x: int, y: int) -> tuple[int, int, int, np.ndarray]:
+        async with semaphore:
+            img = await fetch_tile(client, z, x, y)
+        return z, x, y, decode_terrarium(img)
+
+    tile_results = await asyncio.gather(
+        *(_fetch_decode(z, x, y) for z, x, y in tile_coords)
+    )
+
+    for z, x, y, elev in tile_results:
         row_offset = (y - tile_range.y_min) * TILE_SIZE
         col_offset = (x - tile_range.x_min) * TILE_SIZE
         mosaic[row_offset : row_offset + TILE_SIZE, col_offset : col_offset + TILE_SIZE] = elev
@@ -120,20 +132,30 @@ class DEMSnapshot:
     cell_size_meters: float
 
 
+def _resolve_tile_range(
+    target_bounds: GeoBounds,
+    zoom: int | None = None,
+) -> TileRange:
+    """Choose the highest zoom that stays within the server tile cap."""
+    requested_zoom = zoom or settings.default_terrarium_zoom
+
+    for candidate_zoom in range(requested_zoom, -1, -1):
+        tile_range = bounds_to_tile_range(target_bounds, candidate_zoom)
+        if tile_range.tile_count <= settings.max_tiles_per_request:
+            return tile_range
+
+    raise ValueError(
+        f"Request covers more than {settings.max_tiles_per_request} tiles even at the lowest supported zoom. "
+        f"Try a smaller radius."
+    )
+
+
 async def fetch_dem_snapshot(
     lat: float, lng: float, radius_m: float, zoom: int | None = None
 ) -> DEMSnapshot:
     """Fetch tiles, decode, stitch, crop, and resample into a 128x128 DEM grid."""
-    zoom = zoom or settings.default_terrarium_zoom
     target_bounds = center_radius_to_bounds(lat, lng, radius_m)
-    tile_range = bounds_to_tile_range(target_bounds, zoom)
-
-    if tile_range.tile_count > settings.max_tiles_per_request:
-        raise ValueError(
-            f"Request covers {tile_range.tile_count} tiles, "
-            f"exceeding the maximum of {settings.max_tiles_per_request}. "
-            f"Try a smaller radius."
-        )
+    tile_range = _resolve_tile_range(target_bounds, zoom)
 
     async with httpx.AsyncClient() as client:
         mosaic, mosaic_bounds = await fetch_and_stitch(client, tile_range)
@@ -144,7 +166,7 @@ async def fetch_dem_snapshot(
         dem=grid,
         bounds=target_bounds,
         tile_coords=tile_range.tile_coords(),
-        zoom=zoom,
+        zoom=tile_range.z,
         cell_size_meters=compute_cell_size_meters(target_bounds, GRID_SIZE),
     )
 

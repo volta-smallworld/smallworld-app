@@ -41,3 +41,12 @@ htmlcov/
 
 # Misc
 *.log
+.logs/
+
+# Generated artifacts
+.preview_artifacts/
+apps/api/.preview_artifacts/
+
+# Claude Code (keep settings.json, ignore local/worktrees)
+.claude/settings.local.json
+.claude/worktrees/

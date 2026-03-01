@@ -9,6 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import numpy as np
 import pytest
 
+from fastmcp.tools.tool import ToolResult
+
 from smallworld_api.mcp.schemas import (
     McpCompositionType,
     TerrainAnalyzeAreaInput,
@@ -22,6 +24,13 @@ from smallworld_api.mcp.schemas import (
     composition_to_mcp,
     composition_from_mcp,
 )
+from smallworld_api.services.previews import (
+    ArtifactInfo,
+    PreviewPipelineResult,
+    PreviewRendererNotConfiguredError,
+    PreviewWarningItem,
+)
+from smallworld_api.services.preview_renderer import RenderError, RenderTimeoutError
 
 
 # ── Schema tests ─────────────────────────────────────────────────────────
@@ -276,3 +285,215 @@ class TestToolRegistration:
         resource_uris = {str(r.uri) for r in resources}
         assert "smallworld://server-info" in resource_uris
         assert "smallworld://usage-guidance" in resource_uris
+
+
+# ── Preview render pose tool tests ──────────────────────────────────────
+
+
+def _make_pipeline_result(
+    tmp_dir: Path, *, with_enhanced: bool = False
+) -> PreviewPipelineResult:
+    """Build a minimal PreviewPipelineResult with real temp image files."""
+    # Create a minimal 1x1 PNG for McpImage to read
+    import struct
+    import zlib
+
+    def _minimal_png() -> bytes:
+        sig = b"\x89PNG\r\n\x1a\n"
+        ihdr_data = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+        ihdr_crc = zlib.crc32(b"IHDR" + ihdr_data) & 0xFFFFFFFF
+        ihdr = struct.pack(">I", 13) + b"IHDR" + ihdr_data + struct.pack(">I", ihdr_crc)
+        raw_data = zlib.compress(b"\x00\x00\x00\x00")
+        idat_crc = zlib.crc32(b"IDAT" + raw_data) & 0xFFFFFFFF
+        idat = struct.pack(">I", len(raw_data)) + b"IDAT" + raw_data + struct.pack(">I", idat_crc)
+        iend_crc = zlib.crc32(b"IEND") & 0xFFFFFFFF
+        iend = struct.pack(">I", 0) + b"IEND" + struct.pack(">I", iend_crc)
+        return sig + ihdr + idat + iend
+
+    png_bytes = _minimal_png()
+
+    raw_path = tmp_dir / "raw.png"
+    raw_path.write_bytes(png_bytes)
+
+    raw = ArtifactInfo(
+        local_path=str(raw_path),
+        relative_url="/api/v1/previews/abc123/artifacts/raw",
+        width=1536,
+        height=1024,
+    )
+    enhanced = None
+    if with_enhanced:
+        enh_path = tmp_dir / "enhanced.png"
+        enh_path.write_bytes(png_bytes)
+        enhanced = ArtifactInfo(
+            local_path=str(enh_path),
+            relative_url="/api/v1/previews/abc123/artifacts/enhanced",
+            width=1536,
+            height=1024,
+        )
+    return PreviewPipelineResult(
+        preview_id="abc123",
+        status="completed",
+        warnings=[],
+        raw_artifact=raw,
+        enhanced_artifact=enhanced,
+        camera_metadata={"lat": 39.7, "lng": -105.0, "heading_deg": 113.5},
+        location_metadata={"scene_center": {"lat": 39.74, "lng": -104.99}},
+        scene_metadata={"scene_id": "s1", "scene_type": "peak-ridge"},
+        composition_metadata={"target": {"template": "ruleOfThirds"}},
+        summary="Peak preview facing ESE",
+        timings_ms={"render": 1200, "enhancement": None, "total": 1500},
+        manifest_path=str(tmp_dir / "manifest.json"),
+    )
+
+
+# Shared tool kwargs matching the function signature
+_TOOL_KWARGS = dict(
+    camera={
+        "position": {"lat": 39.7, "lng": -105.0, "alt_meters": 2400},
+        "heading_deg": 113.5,
+        "pitch_deg": -8.4,
+    },
+    scene={
+        "center": {"lat": 39.74, "lng": -104.99},
+        "radius_meters": 5000,
+    },
+    composition={
+        "target_template": "rule_of_thirds",
+    },
+)
+
+
+class TestPreviewRenderPoseTool:
+    """Tests for the preview_render_pose MCP tool function."""
+
+    @patch("smallworld_api.mcp.tools_previews.render_preview_pipeline", new_callable=AsyncMock)
+    @patch("smallworld_api.mcp.tools_previews.settings")
+    async def test_include_images_false_returns_dict(self, mock_settings, mock_pipeline, tmp_path):
+        from smallworld_api.mcp.tools_previews import preview_render_pose
+
+        mock_settings.preview_public_base_url = "http://localhost:8080"
+        mock_pipeline.return_value = _make_pipeline_result(tmp_path)
+
+        result = await preview_render_pose(**_TOOL_KWARGS, include_images=False)
+
+        assert isinstance(result, dict)
+        assert result["id"] == "abc123"
+        assert result["status"] == "completed"
+        assert "raw.png" in result["raw_image"]["local_path"]
+        assert result["raw_image"]["url"].startswith("http://localhost:8080")
+        assert result["enhanced_image"] is None
+
+    @patch("smallworld_api.mcp.tools_previews.render_preview_pipeline", new_callable=AsyncMock)
+    @patch("smallworld_api.mcp.tools_previews.settings")
+    async def test_include_images_true_returns_tool_result(self, mock_settings, mock_pipeline, tmp_path):
+        from smallworld_api.mcp.tools_previews import preview_render_pose
+
+        mock_settings.preview_public_base_url = ""
+        mock_pipeline.return_value = _make_pipeline_result(tmp_path)
+
+        result = await preview_render_pose(**_TOOL_KWARGS, include_images=True)
+
+        assert isinstance(result, ToolResult)
+        assert result.structured_content is not None
+        assert "result" in result.structured_content
+        assert result.structured_content["result"]["id"] == "abc123"
+        # Content should have JSON text + raw image
+        assert len(result.content) >= 2
+
+    @patch("smallworld_api.mcp.tools_previews.render_preview_pipeline", new_callable=AsyncMock)
+    @patch("smallworld_api.mcp.tools_previews.settings")
+    async def test_default_include_images_returns_dict(self, mock_settings, mock_pipeline, tmp_path):
+        """Default (include_images omitted) should return metadata-only output."""
+        from smallworld_api.mcp.tools_previews import preview_render_pose
+
+        mock_settings.preview_public_base_url = ""
+        mock_pipeline.return_value = _make_pipeline_result(tmp_path)
+
+        # Call without include_images — should default to False
+        result = await preview_render_pose(**_TOOL_KWARGS)
+
+        assert isinstance(result, dict)
+        assert result["id"] == "abc123"
+        assert result["raw_image"]["url"] is None
+
+    @patch("smallworld_api.mcp.tools_previews.render_preview_pipeline", new_callable=AsyncMock)
+    @patch("smallworld_api.mcp.tools_previews.settings")
+    async def test_missing_anchor_fields_are_inferred(self, mock_settings, mock_pipeline, tmp_path):
+        from smallworld_api.mcp.tools_previews import preview_render_pose
+
+        mock_settings.preview_public_base_url = ""
+        mock_pipeline.return_value = _make_pipeline_result(tmp_path)
+
+        tool_kwargs = {
+            **_TOOL_KWARGS,
+            "composition": {
+                "target_template": "rule_of_thirds",
+                "anchors": [
+                    {
+                        "lat": 39.74,
+                        "lng": -104.99,
+                        "alt_meters": 2500,
+                    }
+                ],
+            },
+        }
+        result = await preview_render_pose(
+            **tool_kwargs,
+        )
+
+        assert isinstance(result, dict)
+        kwargs = mock_pipeline.await_args.kwargs
+        assert kwargs["anchors"] == [
+            {
+                "id": "anchor-1",
+                "label": None,
+                "lat": 39.74,
+                "lng": -104.99,
+                "alt_meters": 2500,
+                "desired_normalized_x": 0.5,
+                "desired_normalized_y": 0.5,
+            }
+        ]
+
+    @patch("smallworld_api.mcp.tools_previews.render_preview_pipeline", new_callable=AsyncMock)
+    @patch("smallworld_api.mcp.tools_previews.settings")
+    async def test_inline_with_enhanced_artifact(self, mock_settings, mock_pipeline, tmp_path):
+        from smallworld_api.mcp.tools_previews import preview_render_pose
+
+        mock_settings.preview_public_base_url = ""
+        mock_pipeline.return_value = _make_pipeline_result(tmp_path, with_enhanced=True)
+
+        result = await preview_render_pose(**_TOOL_KWARGS, include_images=True)
+
+        assert isinstance(result, ToolResult)
+        # JSON text + raw image + enhanced image = 3 content blocks
+        assert len(result.content) >= 3
+        assert result.structured_content["result"]["enhanced_image"] is not None
+
+    @patch("smallworld_api.mcp.tools_previews.render_preview_pipeline", new_callable=AsyncMock)
+    async def test_error_renderer_not_configured(self, mock_pipeline):
+        from smallworld_api.mcp.tools_previews import preview_render_pose
+
+        mock_pipeline.side_effect = PreviewRendererNotConfiguredError("not configured")
+
+        with pytest.raises(RuntimeError, match="Preview renderer is not configured"):
+            await preview_render_pose(**_TOOL_KWARGS)
+
+    @patch("smallworld_api.mcp.tools_previews.render_preview_pipeline", new_callable=AsyncMock)
+    async def test_error_render_timeout(self, mock_pipeline):
+        from smallworld_api.mcp.tools_previews import preview_render_pose
+
+        mock_pipeline.side_effect = RenderTimeoutError("timed out")
+
+        with pytest.raises(RuntimeError, match="timed out"):
+            await preview_render_pose(**_TOOL_KWARGS)
+
+    @patch("smallworld_api.mcp.tools_previews.render_preview_pipeline", new_callable=AsyncMock)
+    async def test_error_render_failed(self, mock_pipeline):
+        from smallworld_api.mcp.tools_previews import preview_render_pose
+
+        mock_pipeline.side_effect = RenderError("renderer crashed")
+
+        with pytest.raises(RuntimeError, match="Preview render failed: renderer crashed"):
+            await preview_render_pose(**_TOOL_KWARGS)

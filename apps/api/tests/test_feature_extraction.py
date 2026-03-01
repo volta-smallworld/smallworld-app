@@ -89,6 +89,27 @@ def test_diagonal_mask_traces_single_path():
     assert paths[0]["lengthMetersApprox"] > 0
 
 
+def test_mask_path_order_stays_connected_through_branches():
+    mask = np.zeros((16, 16), dtype=bool)
+    trunk = [(2, 2), (3, 2), (4, 2), (5, 2), (6, 2)]
+    branch = [(4, 3), (4, 4), (4, 5), (4, 6)]
+    for r, c in trunk + branch:
+        mask[r, c] = True
+
+    paths = _mask_to_paths(mask, BOUNDS, np.zeros((16, 16)), CELL_SIZE, min_cells=1)
+    assert len(paths) == 1
+    assert len(paths[0]["path"]) >= 2
+
+    def _to_grid(pt: dict) -> tuple[int, int]:
+        row = int(round((BOUNDS.north - pt["lat"]) / (BOUNDS.north - BOUNDS.south) * 15))
+        col = int(round((pt["lng"] - BOUNDS.west) / (BOUNDS.east - BOUNDS.west) * 15))
+        return row, col
+
+    grid_points = [_to_grid(pt) for pt in paths[0]["path"]]
+    for (r1, c1), (r2, c2) in zip(grid_points, grid_points[1:]):
+        assert max(abs(r2 - r1), abs(c2 - c1)) <= 1
+
+
 def test_flat_topped_summit_collapses_to_single_peak():
     dem = np.full((128, 128), 1000.0)
     dem[50:60, 50:60] = 2000.0
