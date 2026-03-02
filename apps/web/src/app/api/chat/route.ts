@@ -31,6 +31,7 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const requestId = crypto.randomUUID();
+    const sessionId = request.headers.get("x-session-id") ?? undefined;
 
     // Streaming SSE path
     if (body.stream) {
@@ -44,7 +45,8 @@ export async function POST(request: Request): Promise<Response> {
             await orchestrateChatStream(
               body.messages.map((m) => ({ role: m.role, content: m.content })),
               send,
-              requestId
+              requestId,
+              sessionId
             );
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
@@ -69,7 +71,8 @@ export async function POST(request: Request): Promise<Response> {
         role: m.role,
         content: m.content,
       })),
-      requestId
+      requestId,
+      sessionId
     );
 
     // Return success response

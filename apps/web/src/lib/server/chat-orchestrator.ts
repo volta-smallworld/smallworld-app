@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { ToolRun, StreamEvent } from "@/types/chat";
 import { listMcpTools, callMcpTool } from "@/lib/server/mcp-client";
 import { isToolLoggingEnabled, appendToolLog } from "@/lib/server/tool-log-store";
+import { appendConversationLog } from "@/lib/server/conversation-log-store";
 import { CHAT_SYSTEM_PROMPT } from "@/lib/server/chat-system-prompt";
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -15,12 +16,15 @@ const maxToolOutputChars = parseInt(
 
 export async function orchestrateChat(
   messages: Array<{ role: "user" | "assistant"; content: string }>,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
 ): Promise<{
   assistantText: string;
   toolRuns: ToolRun[];
   usage: { inputTokens: number; outputTokens: number };
 }> {
+  const orchestrationStartMs = Date.now();
+
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY is not configured");
   }
@@ -175,6 +179,25 @@ export async function orchestrateChat(
     anthropicMessages.push({ role: "user", content: toolResultContent });
   }
 
+  if (sessionId && requestId) {
+    const lastUserMsg = messages.filter((m) => m.role === "user").pop();
+    appendConversationLog({
+      id: crypto.randomUUID(),
+      sessionId,
+      requestId,
+      timestamp: new Date().toISOString(),
+      userMessage: lastUserMsg?.content ?? "",
+      assistantResponse: assistantText,
+      toolRuns: toolRuns.map((t) => ({
+        toolName: t.toolName,
+        durationMs: t.durationMs,
+        isError: t.isError,
+      })),
+      usage: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens },
+      durationMs: Date.now() - orchestrationStartMs,
+    }).catch(() => {});
+  }
+
   return {
     assistantText,
     toolRuns,
@@ -188,8 +211,11 @@ export async function orchestrateChat(
 export async function orchestrateChatStream(
   messages: Array<{ role: "user" | "assistant"; content: string }>,
   emit: (event: StreamEvent) => void,
-  requestId?: string
+  requestId?: string,
+  sessionId?: string,
 ): Promise<void> {
+  const orchestrationStartMs = Date.now();
+
   if (!apiKey) {
     emit({ type: "error", message: "ANTHROPIC_API_KEY is not configured", code: "config_error" });
     return;
@@ -379,6 +405,25 @@ export async function orchestrateChatStream(
 
       // Append tool results as a user message
       anthropicMessages.push({ role: "user", content: toolResultContent });
+    }
+
+    if (sessionId && requestId) {
+      const lastUserMsg = messages.filter((m) => m.role === "user").pop();
+      appendConversationLog({
+        id: crypto.randomUUID(),
+        sessionId,
+        requestId,
+        timestamp: new Date().toISOString(),
+        userMessage: lastUserMsg?.content ?? "",
+        assistantResponse: assistantText,
+        toolRuns: toolRuns.map((t) => ({
+          toolName: t.toolName,
+          durationMs: t.durationMs,
+          isError: t.isError,
+        })),
+        usage: { inputTokens: totalInputTokens, outputTokens: totalOutputTokens },
+        durationMs: Date.now() - orchestrationStartMs,
+      }).catch(() => {});
     }
 
     emit({
