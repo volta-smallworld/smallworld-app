@@ -78,7 +78,7 @@ def usage_guidance() -> str:
             "Enhancement requires Gemini API credentials. If not configured, you still get the raw render.",
             "Compositions use snake_case: rule_of_thirds, golden_ratio, leading_line, symmetry.",
             "preview_render_pose can render without anchors; missing anchor ids and normalized positions are inferred.",
-            "preview_render_pose returns metadata by default. Set include_images=true to embed inline images.",
+            "preview_render_pose returns metadata by default. Set include_images=true to include base64 image data in the tool response. The chat UI renders images via proxy routes /api/previews/{id}/raw and /api/previews/{id}/enhanced — not from inline base64 data.",
             "Terrain tools automatically reduce zoom when a large radius would exceed the tile cap. Check zoom_used in the response.",
             "Craft a scene-specific enhancement prompt based on the terrain context (lighting, season, atmosphere, time of day). System guardrails protecting terrain fidelity are prepended automatically — your prompt only needs creative direction.",
             "Enhancement requires GEMINI_API_KEY. Without a custom prompt the default creative prompt (golden hour, cinematic grading) is used.",

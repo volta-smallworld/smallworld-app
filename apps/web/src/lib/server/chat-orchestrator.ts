@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { ToolRun, StreamEvent } from "@/types/chat";
 import { listMcpTools, callMcpTool } from "@/lib/server/mcp-client";
 import { isToolLoggingEnabled, appendToolLog } from "@/lib/server/tool-log-store";
+import { CHAT_SYSTEM_PROMPT } from "@/lib/server/chat-system-prompt";
 
 const apiKey = process.env.ANTHROPIC_API_KEY;
 const model = process.env.ANTHROPIC_MODEL ?? "claude-sonnet-4-20250514";
@@ -69,8 +70,7 @@ export async function orchestrateChat(
     const response = await anthropic.messages.create({
       model,
       max_tokens: 4096,
-      system:
-        "You are a helpful terrain analysis assistant for Smallworld. Use the available tools to analyze terrain, find viewpoints, and render previews. Be concise.",
+      system: CHAT_SYSTEM_PROMPT,
       messages: anthropicMessages,
       tools,
     });
@@ -245,8 +245,7 @@ export async function orchestrateChatStream(
       const stream = anthropic.messages.stream({
         model,
         max_tokens: 4096,
-        system:
-          "You are a helpful terrain analysis assistant for Smallworld. Use the available tools to analyze terrain, find viewpoints, and render previews. Be concise.",
+        system: CHAT_SYSTEM_PROMPT,
         messages: anthropicMessages,
         tools,
       });
