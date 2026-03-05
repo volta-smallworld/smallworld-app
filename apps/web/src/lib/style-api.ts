@@ -5,9 +5,7 @@ import type {
   StyleViewpointSearchResponse,
   StyleVerificationResult,
 } from "@/types/terrain";
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+import { API_BASE_URL } from "@/lib/server/urls";
 
 export async function fetchStyleCapabilities(): Promise<StyleReferenceCapability> {
   const resp = await fetch(

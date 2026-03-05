@@ -67,6 +67,20 @@ def _lng_to_tile_x(lng: float, zoom: int) -> int:
     return int(n * ((lng + 180) / 360))
 
 
+def _lat_to_tile_y_frac(lat: float, zoom: int) -> float:
+    """Like _lat_to_tile_y but returns the fractional (continuous) tile coordinate."""
+    lat = max(-85.05, min(85.05, lat))
+    n = 2**zoom
+    lat_rad = math.radians(lat)
+    return n * (1 - (math.log(math.tan(lat_rad) + 1 / math.cos(lat_rad)) / math.pi)) / 2
+
+
+def _lng_to_tile_x_frac(lng: float, zoom: int) -> float:
+    """Like _lng_to_tile_x but returns the fractional (continuous) tile coordinate."""
+    n = 2**zoom
+    return n * ((lng + 180) / 360)
+
+
 def bounds_to_tile_range(bounds: GeoBounds, zoom: int) -> TileRange:
     """Convert geographic bounds to a slippy-map tile range at the given zoom."""
     max_idx = 2**zoom - 1

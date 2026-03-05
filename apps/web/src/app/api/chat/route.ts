@@ -32,6 +32,7 @@ export async function POST(request: Request): Promise<Response> {
 
     const requestId = crypto.randomUUID();
     const sessionId = request.headers.get("x-session-id") ?? undefined;
+    const incomingArtifacts = Array.isArray(body.artifacts) ? body.artifacts : undefined;
 
     // Streaming SSE path
     if (body.stream) {
@@ -46,7 +47,8 @@ export async function POST(request: Request): Promise<Response> {
               body.messages.map((m) => ({ role: m.role, content: m.content })),
               send,
               requestId,
-              sessionId
+              sessionId,
+              incomingArtifacts,
             );
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
@@ -72,7 +74,8 @@ export async function POST(request: Request): Promise<Response> {
         content: m.content,
       })),
       requestId,
-      sessionId
+      sessionId,
+      incomingArtifacts,
     );
 
     // Return success response
@@ -83,16 +86,17 @@ export async function POST(request: Request): Promise<Response> {
         content: result.assistantText,
       },
       toolRuns: result.toolRuns,
+      artifacts: result.artifacts.length > 0 ? result.artifacts : undefined,
       usage: result.usage,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    // Handle Anthropic API key error
-    if (errorMessage.includes("ANTHROPIC_API_KEY")) {
+    // Handle DeepSeek API key error
+    if (errorMessage.includes("DEEPSEEK_API_KEY")) {
       return NextResponse.json(
         {
-          error: "Anthropic API key not configured",
+          error: "DeepSeek API key not configured",
           code: "config_error",
         },
         { status: 500 }

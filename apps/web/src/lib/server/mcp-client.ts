@@ -4,8 +4,7 @@
  * by speaking the Streamable HTTP protocol directly.
  */
 
-const MCP_SERVER_URL =
-  process.env.MCP_SERVER_URL ?? "http://127.0.0.1:8001/mcp";
+import { MCP_SERVER_URL } from "./urls";
 
 export interface McpTool {
   name: string;

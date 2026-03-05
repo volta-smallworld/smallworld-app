@@ -14,6 +14,7 @@ import cv2
 import numpy as np
 
 from smallworld_api.config import settings
+from smallworld_api.services.camera_safety import enforce_agl_floor_dem
 from smallworld_api.services.style_fingerprint import extract_fingerprint_from_contours, cosine_similarity
 from smallworld_api.services.tiles import GeoBounds
 from smallworld_api.services.viewpoints import generate_viewpoints
@@ -402,6 +403,18 @@ def find_style_viewpoints(
             # Refine the candidate
             _refine_style_candidate(vp, reference_fingerprint, dem, bounds, patch["descriptor"])
             contour_refinement = vp.pop("_contour_refinement", patch_similarity)
+
+        # Enforce AGL floor using the DEM (sync, no network I/O)
+        cam = vp.get("camera", {})
+        cam_lat = cam.get("lat", 0.0)
+        cam_lng = cam.get("lng", 0.0)
+        cam_alt = cam.get("altitudeMeters", 0.0)
+        safety = enforce_agl_floor_dem(cam_lat, cam_lng, cam_alt, dem, bounds)
+        if safety.was_clamped:
+            cam["altitudeMeters"] = safety.effective_alt
+            validation = vp.get("validation", {})
+            validation["clearanceMeters"] = safety.clearance
+            vp["validation"] = validation
 
         base_score = vp.get("score", 0.0)
 

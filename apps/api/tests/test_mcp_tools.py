@@ -15,6 +15,7 @@ from smallworld_api.mcp.schemas import (
     McpCompositionType,
     TerrainAnalyzeAreaInput,
     TerrainFindViewpointsInput,
+    TerrainPointContextInput,
     PreviewRenderPoseInput,
     McpCameraPose,
     McpGeoPosition,
@@ -84,6 +85,26 @@ class TestTerrainFindViewpointsInput:
             compositions=[McpCompositionType.rule_of_thirds],
         )
         assert len(inp.compositions) == 1
+
+
+class TestTerrainPointContextInput:
+    def test_valid(self):
+        inp = TerrainPointContextInput(lat=39.7, lng=-105.0)
+        assert inp.lat == 39.7
+        assert inp.camera_altitude_meters is None
+        assert inp.context_radius_meters == 2000
+
+    def test_with_camera_altitude(self):
+        inp = TerrainPointContextInput(lat=39.7, lng=-105.0, camera_altitude_meters=2400.0)
+        assert inp.camera_altitude_meters == 2400.0
+
+    def test_invalid_lat(self):
+        with pytest.raises(Exception):
+            TerrainPointContextInput(lat=91.0, lng=-105.0)
+
+    def test_invalid_context_radius(self):
+        with pytest.raises(Exception):
+            TerrainPointContextInput(lat=39.7, lng=-105.0, context_radius_meters=100)
 
 
 class TestPreviewRenderPoseInput:
@@ -251,6 +272,8 @@ class TestResources:
         assert "terrain_analyze_area" in info["tools"]
         assert "terrain_find_viewpoints" in info["tools"]
         assert "preview_render_pose" in info["tools"]
+        assert "terrain_point_context" in info["tools"]
+        assert len(info["tools"]) == 4
         assert "terrain_defaults" in info
         assert "viewpoint_defaults" in info
         assert "preview_capabilities" in info
@@ -259,17 +282,18 @@ class TestResources:
         from smallworld_api.mcp.resources import usage_guidance
 
         guidance = json.loads(usage_guidance())
-        assert len(guidance["workflow"]) == 3
+        assert len(guidance["workflow"]) == 4
         assert guidance["workflow"][0]["tool"] == "terrain_analyze_area"
         assert guidance["workflow"][1]["tool"] == "terrain_find_viewpoints"
         assert guidance["workflow"][2]["tool"] == "preview_render_pose"
+        assert guidance["workflow"][3]["tool"] == "terrain_point_context"
 
 
 # ── Tool registration test ───────────────────────────────────────────────
 
 
 class TestToolRegistration:
-    async def test_server_has_three_tools(self):
+    async def test_server_has_four_tools(self):
         from smallworld_api.mcp.server import mcp
 
         tools = await mcp.list_tools()
@@ -277,6 +301,7 @@ class TestToolRegistration:
         assert "terrain_analyze_area" in tool_names
         assert "terrain_find_viewpoints" in tool_names
         assert "preview_render_pose" in tool_names
+        assert "terrain_point_context" in tool_names
 
     async def test_server_has_two_resources(self):
         from smallworld_api.mcp.server import mcp

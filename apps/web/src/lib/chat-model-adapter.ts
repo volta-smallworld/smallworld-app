@@ -58,9 +58,8 @@ export const smallworldModelAdapter: ChatModelAdapter = {
     const decoder = new TextDecoder();
     let buffer = "";
 
-    // Accumulate state across SSE events
-    let text = "";
-    const toolCalls: ToolCallState[] = [];
+    // Ordered parts array — preserves chronological interleaving of text and tool calls
+    const parts: ContentPart[] = [];
     const pendingToolCallIndexes = new Map<string, number[]>();
     let toolCallCounter = 0;
 
@@ -85,13 +84,21 @@ export const smallworldModelAdapter: ChatModelAdapter = {
         }
 
         switch (event.type) {
-          case "text_delta":
-            text += event.delta;
+          case "text_delta": {
+            // Append to the last text part, or start a new one
+            const last = parts[parts.length - 1];
+            if (last && last.type === "text") {
+              last.text += event.delta;
+            } else {
+              parts.push({ type: "text", text: event.delta });
+            }
             break;
+          }
 
           case "tool_start": {
             const callId = `call_${toolCallCounter++}`;
-            const index = toolCalls.push({
+            const index = parts.push({
+              type: "tool-call",
               toolCallId: callId,
               toolName: event.toolName,
               args: event.input,
@@ -115,15 +122,16 @@ export const smallworldModelAdapter: ChatModelAdapter = {
             }
 
             if (index !== undefined) {
-              toolCalls[index] = {
-                ...toolCalls[index],
-                result: event.output,
-                isError: event.isError,
-              };
+              const part = parts[index];
+              if (part.type === "tool-call") {
+                part.result = event.output;
+                part.isError = event.isError;
+              }
             } else {
               // Preserve the result even if a start event was missed.
               const callId = `call_${toolCallCounter++}`;
-              toolCalls.push({
+              parts.push({
+                type: "tool-call",
                 toolCallId: callId,
                 toolName: event.toolName,
                 args: {},
@@ -135,10 +143,9 @@ export const smallworldModelAdapter: ChatModelAdapter = {
           }
 
           case "done":
-            // Final text from the server — use it as the authoritative text
-            if (event.content) {
-              text = event.content;
-            }
+            // Don't overwrite parts — the streamed order is authoritative.
+            // The done.content field is a flat concatenation that would
+            // destroy interleaving.
             break;
 
           case "error":
@@ -150,44 +157,44 @@ export const smallworldModelAdapter: ChatModelAdapter = {
         }
 
         // Yield accumulated state after every event
-        yield buildResult(text, toolCalls);
+        yield buildResult(parts);
       }
     }
 
     // Final yield
-    yield buildResult(text, toolCalls);
+    yield buildResult(parts);
   },
 };
 
-function buildResult(
-  text: string,
-  toolCalls: ToolCallState[],
-): ChatModelRunResult {
+function buildResult(parts: ContentPart[]): ChatModelRunResult {
   const content: ChatModelRunResult["content"] = [];
 
-  if (text) {
-    (content as unknown[]).push({ type: "text" as const, text });
-  }
-
-  for (const tc of toolCalls) {
-    (content as unknown[]).push({
-      type: "tool-call" as const,
-      toolCallId: tc.toolCallId,
-      toolName: tc.toolName,
-      args: tc.args,
-      argsText: JSON.stringify(tc.args, null, 2),
-      result: tc.result,
-      isError: tc.isError,
-    });
+  for (const part of parts) {
+    if (part.type === "text") {
+      (content as unknown[]).push({ type: "text" as const, text: part.text });
+    } else {
+      (content as unknown[]).push({
+        type: "tool-call" as const,
+        toolCallId: part.toolCallId,
+        toolName: part.toolName,
+        args: part.args,
+        argsText: JSON.stringify(part.args, null, 2),
+        result: part.result,
+        isError: part.isError,
+      });
+    }
   }
 
   return { content };
 }
 
-type ToolCallState = {
-  toolCallId: string;
-  toolName: string;
-  args: Record<string, unknown>;
-  result?: string;
-  isError?: boolean;
-};
+type ContentPart =
+  | { type: "text"; text: string }
+  | {
+      type: "tool-call";
+      toolCallId: string;
+      toolName: string;
+      args: Record<string, unknown>;
+      result?: string;
+      isError?: boolean;
+    };

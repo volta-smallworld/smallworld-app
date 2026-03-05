@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -46,6 +48,16 @@ class Stats(BaseModel):
     meanElevation: float
 
 
+class FidelityInfo(BaseModel):
+    demProvider: str
+    zoomRequested: int
+    zoomUsed: int
+    gridWidth: int
+    gridHeight: int
+    resampleMethod: str
+    tileCount: int
+
+
 class ElevationGridResponse(BaseModel):
     request: RequestEcho
     bounds: Bounds
@@ -53,6 +65,7 @@ class ElevationGridResponse(BaseModel):
     tiles: list[TileRef]
     stats: Stats
     source: str = "aws-terrarium"
+    fidelity: FidelityInfo | None = None
 
 
 # ── Analysis (hour-two) ─────────────────────────────────────────────────────
@@ -144,6 +157,46 @@ class SceneSeed(BaseModel):
     score: float
 
 
+# ── Point Context ──────────────────────────────────────────────────────────
+
+
+class PointContextRequest(BaseModel):
+    point: LatLng
+    cameraAltitudeMeters: float | None = None
+    contextRadiusMeters: float = Field(default=2000, ge=500, le=10000)
+    zoom: int | None = Field(default=None, ge=1, le=18)
+
+
+class PointSamplingInfo(BaseModel):
+    zoom: int
+    tilesFetched: int
+    metersPerPixelApprox: float
+    method: str
+
+
+class MetricWithPoint(BaseModel):
+    atPoint: float
+    min: float
+    max: float
+    mean: float
+
+
+class PointTerrainContext(BaseModel):
+    radiusMeters: float
+    cellSizeMeters: float
+    elevation: MetricSummary
+    slopeDegrees: MetricWithPoint
+    curvature: MetricWithPoint
+    localReliefMeters: MetricWithPoint
+
+
+class PointContextResponse(BaseModel):
+    groundElevationMeters: float
+    cameraAglMeters: float | None = None
+    sampling: PointSamplingInfo
+    context: PointTerrainContext | None = None
+
+
 class TerrainAnalysisResponse(BaseModel):
     request: AnalysisRequestEcho
     bounds: Bounds
@@ -154,3 +207,4 @@ class TerrainAnalysisResponse(BaseModel):
     scenes: list[SceneSeed]
     tiles: list[TileRef]
     source: str = "aws-terrarium"
+    fidelity: FidelityInfo | None = None

@@ -11,18 +11,53 @@ interface TerrainResultPanelProps {
   error: string | null;
 }
 
-function Row({ label, value }: { label: string; value: string | number }) {
+function StatBox({
+  label,
+  min,
+  max,
+  mean,
+  unit,
+}: {
+  label: string;
+  min?: number;
+  max: number;
+  mean: number;
+  unit: string;
+}) {
   return (
     <div
       style={{
-        display: "flex",
-        justifyContent: "space-between",
-        padding: "3px 0",
-        fontSize: 13,
+        padding: "8px 10px",
+        borderRadius: 6,
+        backgroundColor: "rgba(255, 255, 255, 0.03)",
+        border: "1px solid rgba(255, 255, 255, 0.04)",
       }}
     >
-      <span style={{ color: "#888" }}>{label}</span>
-      <span style={{ fontFamily: "monospace" }}>{value}</span>
+      <div
+        style={{
+          fontSize: 10,
+          fontWeight: 600,
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
+          color: "#555",
+          marginBottom: 4,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontFamily: "monospace",
+          fontSize: 14,
+          color: "#d0d0d0",
+          fontWeight: 600,
+        }}
+      >
+        {max}{unit}
+      </div>
+      <div style={{ fontSize: 10, color: "#555", marginTop: 2 }}>
+        {min !== undefined ? `${min}${unit} min · ` : ""}{mean}{unit} avg
+      </div>
     </div>
   );
 }
@@ -36,13 +71,15 @@ export default function TerrainResultPanel({
 
   if (fetchState === "loading") {
     return (
-      <div style={{ padding: 16, color: "#aaa" }}>Analyzing terrain...</div>
+      <div style={{ padding: "14px 16px", color: "#aaa" }}>
+        Analyzing terrain...
+      </div>
     );
   }
 
   if (fetchState === "error") {
     return (
-      <div style={{ padding: 16, color: "#ef4444" }}>
+      <div style={{ padding: "14px 16px", color: "#ef4444" }}>
         <strong>Error:</strong> {error}
       </div>
     );
@@ -53,83 +90,71 @@ export default function TerrainResultPanel({
   const { summary, features, hotspots } = result;
 
   return (
-    <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-      <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Analysis Results</h3>
-
-      {/* Summary stats */}
-      <div>
-        <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Elevation</div>
-        <Row label="Min" value={`${summary.elevationMeters.min} m`} />
-        <Row label="Max" value={`${summary.elevationMeters.max} m`} />
-        <Row label="Mean" value={`${summary.elevationMeters.mean} m`} />
+    <div style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 600,
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+          color: "#555",
+          marginBottom: 10,
+        }}
+      >
+        ANALYSIS RESULTS
       </div>
 
-      <div>
-        <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Slope</div>
-        <Row label="Max" value={`${summary.slopeDegrees.max}\u00b0`} />
-        <Row label="Mean" value={`${summary.slopeDegrees.mean}\u00b0`} />
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <StatBox
+          label="Elevation"
+          min={summary.elevationMeters.min}
+          max={summary.elevationMeters.max}
+          mean={summary.elevationMeters.mean}
+          unit="m"
+        />
+        <StatBox
+          label="Slope"
+          max={summary.slopeDegrees.max}
+          mean={summary.slopeDegrees.mean}
+          unit="°"
+        />
+        <StatBox
+          label="Relief"
+          max={summary.localReliefMeters.max}
+          mean={summary.localReliefMeters.mean}
+          unit="m"
+        />
+        <StatBox
+          label="Interest"
+          max={summary.interestScore.max}
+          mean={summary.interestScore.mean}
+          unit=""
+        />
       </div>
 
-      <div>
-        <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Local Relief</div>
-        <Row label="Max" value={`${summary.localReliefMeters.max} m`} />
-        <Row label="Mean" value={`${summary.localReliefMeters.mean} m`} />
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+        {[
+          { label: "Peaks", count: features.peaks.length, color: "#eab308" },
+          { label: "Ridges", count: features.ridges.length, color: "#d97706" },
+          { label: "Cliffs", count: features.cliffs.length, color: "#f97316" },
+          { label: "Water", count: features.waterChannels.length, color: "#3b82f6" },
+          { label: "Hotspots", count: hotspots.length, color: "#06b6d4" },
+        ].map(({ label, count, color }) => (
+          <div
+            key={label}
+            style={{
+              padding: "3px 8px",
+              borderRadius: 4,
+              backgroundColor: color + "15",
+              border: `1px solid ${color}30`,
+              fontSize: 11,
+              color: color,
+            }}
+          >
+            {count} {label}
+          </div>
+        ))}
       </div>
-
-      <div>
-        <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Interest</div>
-        <Row label="Max" value={summary.interestScore.max.toFixed(2)} />
-        <Row label="Mean" value={summary.interestScore.mean.toFixed(2)} />
-      </div>
-
-      {/* Feature counts */}
-      <div>
-        <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Features</div>
-        <Row label="Peaks" value={features.peaks.length} />
-        <Row label="Ridges" value={features.ridges.length} />
-        <Row label="Cliffs" value={features.cliffs.length} />
-        <Row label="Water" value={features.waterChannels.length} />
-        <Row label="Hotspots" value={hotspots.length} />
-      </div>
-
-      {/* Top peaks */}
-      {features.peaks.length > 0 && (
-        <div>
-          <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Top Peaks</div>
-          {features.peaks.slice(0, 5).map((p) => (
-            <Row
-              key={p.id}
-              label={`${p.elevationMeters?.toFixed(0)} m`}
-              value={`prom ~${p.prominenceMetersApprox?.toFixed(0)} m`}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Top hotspots */}
-      {hotspots.length > 0 && (
-        <div>
-          <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Top Hotspots</div>
-          {hotspots.slice(0, 5).map((h) => (
-            <Row
-              key={h.id}
-              label={h.reasons.join(", ")}
-              value={h.score.toFixed(2)}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Grid info */}
-      <div>
-        <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Grid</div>
-        <Row label="Size" value={`${result.grid.width} x ${result.grid.height}`} />
-        <Row label="Cell size" value={`~${result.grid.cellSizeMetersApprox} m`} />
-        <Row label="Zoom" value={result.request.zoomUsed} />
-        <Row label="Tiles" value={result.tiles.length} />
-      </div>
-
-      <div style={{ fontSize: 11, color: "#666" }}>Source: {result.source}</div>
     </div>
   );
 }

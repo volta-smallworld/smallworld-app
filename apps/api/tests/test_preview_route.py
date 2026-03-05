@@ -207,7 +207,7 @@ def test_enhancement_not_configured_returns_200():
         _stop_patches(patches)
 
 
-def test_render_retries_without_google_3d_and_returns_warning():
+def test_render_retries_with_provider_fallback_and_returns_warning():
     from smallworld_api.config import settings
 
     original_google_key = settings.google_maps_api_key
@@ -215,6 +215,7 @@ def test_render_retries_without_google_3d_and_returns_warning():
 
     patches = _patch_all()
     mocks = _apply_patches(patches)
+    # First attempt (google_3d) fails, second attempt (osm) succeeds
     mocks[0].side_effect = [RenderTimeoutError("timeout"), _mock_render_result()]
     try:
         resp = client.post("/api/v1/previews/render", json=VALID_REQUEST)
@@ -222,7 +223,7 @@ def test_render_retries_without_google_3d_and_returns_warning():
         body = resp.json()
         assert body["status"] == "completed_with_warnings"
         codes = [w["code"] for w in body["warnings"]]
-        assert "render_fallback_without_google_3d" in codes
+        assert "render_provider_fallback" in codes
         assert mocks[0].await_count == 2
     finally:
         settings.google_maps_api_key = original_google_key

@@ -7,6 +7,8 @@ from smallworld_api.models.terrain import (
     AnalysisWeights,
     ElevationGridRequest,
     ElevationGridResponse,
+    PointContextRequest,
+    PointContextResponse,
     TerrainAnalysisRequest,
     TerrainAnalysisResponse,
 )
@@ -33,7 +35,8 @@ from smallworld_api.services.features import (
     extract_water_channels,
 )
 from smallworld_api.services.scenes import group_scenes
-from smallworld_api.services.terrarium import fetch_dem_snapshot, get_elevation_grid
+from smallworld_api.services.point_context import get_point_context
+from smallworld_api.services.terrarium import build_fidelity_dict, fetch_dem_snapshot, get_elevation_grid
 
 router = APIRouter()
 
@@ -167,6 +170,7 @@ async def analyze_terrain(req: TerrainAnalysisRequest):
         "scenes": scenes,
         "tiles": [{"z": z, "x": x, "y": y} for z, x, y in snap.tile_coords],
         "source": "aws-terrarium",
+        "fidelity": build_fidelity_dict(snap),
     }
 
 
@@ -262,4 +266,67 @@ async def find_viewpoints(req: ViewpointSearchRequest):
         "summary": result["summary"],
         "viewpoints": result["viewpoints"],
         "source": "aws-terrarium",
+        "fidelity": build_fidelity_dict(snap),
     }
+
+
+@router.post("/point-context", response_model=PointContextResponse)
+async def point_context(req: PointContextRequest):
+    try:
+        result = await get_point_context(
+            lat=req.point.lat,
+            lng=req.point.lng,
+            camera_altitude_meters=req.cameraAltitudeMeters,
+            context_radius_meters=req.contextRadiusMeters,
+            zoom=req.zoom,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Upstream tile fetch failed: {e.response.status_code}",
+        )
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Upstream tile fetch failed: {e}",
+        )
+
+    # Map snake_case result to camelCase response
+    resp: dict = {
+        "groundElevationMeters": result.ground_elevation_meters,
+        "cameraAglMeters": result.camera_agl_meters,
+        "sampling": {
+            "zoom": result.sampling["zoom"],
+            "tilesFetched": result.sampling["tiles_fetched"],
+            "metersPerPixelApprox": result.sampling["meters_per_pixel_approx"],
+            "method": result.sampling["method"],
+        },
+    }
+    if result.context is not None:
+        ctx = result.context
+        resp["context"] = {
+            "radiusMeters": ctx["radius_meters"],
+            "cellSizeMeters": ctx["cell_size_meters"],
+            "elevation": ctx["elevation"],
+            "slopeDegrees": {
+                "atPoint": ctx["slope_degrees"]["at_point"],
+                "min": ctx["slope_degrees"]["min"],
+                "max": ctx["slope_degrees"]["max"],
+                "mean": ctx["slope_degrees"]["mean"],
+            },
+            "curvature": {
+                "atPoint": ctx["curvature"]["at_point"],
+                "min": ctx["curvature"]["min"],
+                "max": ctx["curvature"]["max"],
+                "mean": ctx["curvature"]["mean"],
+            },
+            "localReliefMeters": {
+                "atPoint": ctx["local_relief_meters"]["at_point"],
+                "min": ctx["local_relief_meters"]["min"],
+                "max": ctx["local_relief_meters"]["max"],
+                "mean": ctx["local_relief_meters"]["mean"],
+            },
+        }
+    return resp

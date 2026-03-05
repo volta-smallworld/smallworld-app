@@ -29,7 +29,9 @@ from smallworld_api.services.preview_enhancement import (
     build_enhancement_prompt,
     enhance_preview as _enhance_preview,
 )
+from smallworld_api.services.camera_safety import enforce_agl_floor_precise
 from smallworld_api.services.preview_renderer import (
+    ProviderName,
     RenderError,
     RenderTimeoutError,
     render_preview as _render_preview,
@@ -70,6 +72,7 @@ class PreviewPipelineResult:
     timings_ms: dict = field(default_factory=dict)
     manifest_path: str = ""
     verification: dict | None = None
+    render_attempts: list[dict] = field(default_factory=list)
 
 
 class PreviewRendererNotConfiguredError(Exception):
@@ -197,33 +200,57 @@ async def render_preview_pipeline(
         "enhancement": {"enabled": enhancement_enabled},
     })
 
-    # 5. Run renderer, retrying without Google 3D if the first attempt fails.
+    # 4b. Pre-render AGL floor check — clamp camera above terrain
+    effective_camera_alt = camera_alt_meters
+    try:
+        safety = await enforce_agl_floor_precise(camera_lat, camera_lng, camera_alt_meters)
+        if safety.was_clamped:
+            effective_camera_alt = safety.effective_alt
+            warnings.append(
+                PreviewWarningItem(
+                    code="camera_clamped_above_terrain",
+                    message=(
+                        f"Camera altitude clamped from {camera_alt_meters:.1f}m to "
+                        f"{safety.effective_alt:.1f}m (ground={safety.ground_elev:.1f}m, "
+                        f"clearance={safety.clearance:.1f}m)."
+                    ),
+                )
+            )
+    except Exception:
+        logger.warning("Terrain sample unavailable for pre-render AGL check", exc_info=True)
+        warnings.append(
+            PreviewWarningItem(
+                code="terrain_sample_unavailable",
+                message="Could not sample terrain for pre-render AGL check. Using original altitude.",
+            )
+        )
+
+    # 5. Build provider fallback chain and run renderer.
+    #
+    # Priority: Google Photorealistic 3D → Ion terrain+imagery → OSM/ellipsoid.
+    # Each provider is only attempted when its required key is available.
+    # The chain always terminates with "osm" so there is guaranteed to be at
+    # least one attempt.
+    provider_chain: list[ProviderName] = []
+    if settings.google_maps_api_key:
+        provider_chain.append("google_3d")
+    if settings.cesium_ion_token:
+        provider_chain.append("ion")
+    provider_chain.append("osm")  # always available as ultimate fallback
+
     render_attempts: list[dict] = []
     render_ms: int | None = None
     render_result = None
-    render_configs = [
-        {
-            "label": "default",
-            "google_maps_api_key": settings.google_maps_api_key,
-        }
-    ]
-    if settings.google_maps_api_key:
-        render_configs.append(
-            {
-                "label": "retry_without_google_3d",
-                "google_maps_api_key": "",
-            }
-        )
 
     last_render_error: RenderTimeoutError | RenderError | None = None
-    for attempt_index, render_cfg in enumerate(render_configs):
+    for attempt_index, provider in enumerate(provider_chain):
         render_start = time.monotonic()
         try:
             render_result = await _render_preview(
                 base_url=settings.preview_renderer_base_url,
                 camera_lat=camera_lat,
                 camera_lng=camera_lng,
-                camera_alt=camera_alt_meters,
+                camera_alt=effective_camera_alt,
                 heading_deg=heading_deg,
                 pitch_deg=pitch_deg,
                 roll_deg=roll_deg,
@@ -234,23 +261,30 @@ async def render_preview_pipeline(
                 timeout_seconds=settings.preview_render_timeout_seconds,
                 cesium_ion_token=settings.cesium_ion_token,
                 mapbox_access_token=settings.mapbox_access_token,
-                google_maps_api_key=render_cfg["google_maps_api_key"],
+                google_maps_api_key=settings.google_maps_api_key,
+                agl_floor_meters=settings.camera_agl_floor_meters,
+                terrain_clamp_enabled=settings.renderer_terrain_clamp_enabled,
+                terrain_sample_timeout_ms=settings.renderer_terrain_sample_timeout_ms,
+                provider=provider,
             )
             render_ms = int((time.monotonic() - render_start) * 1000)
             render_attempts.append(
                 {
                     "attempt": attempt_index + 1,
-                    "mode": render_cfg["label"],
-                    "used_google_3d": bool(render_cfg["google_maps_api_key"]),
+                    "provider": provider,
                     "status": "succeeded",
                     "duration_ms": render_ms,
                 }
             )
             if attempt_index > 0:
+                fallback_providers = [p for p in provider_chain[:attempt_index]]
                 warnings.append(
                     PreviewWarningItem(
-                        code="render_fallback_without_google_3d",
-                        message="Google 3D rendering failed, so the preview was retried without Google 3D tiles.",
+                        code="render_provider_fallback",
+                        message=(
+                            f"Provider(s) {', '.join(fallback_providers)} failed; "
+                            f"preview rendered with '{provider}' fallback."
+                        ),
                     )
                 )
             break
@@ -259,8 +293,7 @@ async def render_preview_pipeline(
             render_attempts.append(
                 {
                     "attempt": attempt_index + 1,
-                    "mode": render_cfg["label"],
-                    "used_google_3d": bool(render_cfg["google_maps_api_key"]),
+                    "provider": provider,
                     "status": "failed",
                     "duration_ms": duration_ms,
                     "error": str(exc),
@@ -268,8 +301,9 @@ async def render_preview_pipeline(
             )
             last_render_error = exc
             logger.warning(
-                "Preview render attempt %s failed for %s: %s",
+                "Preview render attempt %s (%s) failed for %s: %s",
                 attempt_index + 1,
+                provider,
                 preview_id,
                 exc,
             )
@@ -289,6 +323,31 @@ async def render_preview_pipeline(
             ),
         )
         raise last_render_error
+
+    # 5b. Propagate renderer-side terrain clamp diagnostics
+    terrain_clamp = render_result.frame_state.get("terrainClamp")
+    if terrain_clamp:
+        if terrain_clamp.get("wasClamped"):
+            warnings.append(
+                PreviewWarningItem(
+                    code="renderer_terrain_clamp_applied",
+                    message=(
+                        f"Renderer clamped camera above terrain "
+                        f"(ground={terrain_clamp.get('groundMeters')}m, "
+                        f"applied={terrain_clamp.get('appliedAltMeters')}m)."
+                    ),
+                )
+            )
+            applied_alt = terrain_clamp.get("appliedAltMeters")
+            if applied_alt is not None:
+                effective_camera_alt = applied_alt
+        if not terrain_clamp.get("sampled"):
+            warnings.append(
+                PreviewWarningItem(
+                    code="renderer_terrain_sample_failed",
+                    message="Renderer could not sample terrain height at camera position.",
+                )
+            )
 
     # Persist raw artifact
     raw_bytes = render_result.image_path.read_bytes()
@@ -399,16 +458,18 @@ async def render_preview_pipeline(
     # 8. Build metadata
     compass = _heading_to_compass(heading_deg)
 
-    camera_metadata = {
+    camera_metadata: dict = {
         "lat": camera_lat,
         "lng": camera_lng,
-        "alt_meters": camera_alt_meters,
+        "alt_meters": effective_camera_alt,
         "heading_deg": heading_deg,
         "pitch_deg": pitch_deg,
         "roll_deg": roll_deg,
         "fov_deg": fov_deg,
         "compass_direction": compass,
     }
+    if effective_camera_alt != camera_alt_meters:
+        camera_metadata["alt_meters_original"] = camera_alt_meters
 
     location_metadata = {
         "scene_center": {"lat": scene_center_lat, "lng": scene_center_lng},
@@ -467,6 +528,7 @@ async def render_preview_pipeline(
             "height": raw_artifact.height,
         },
         "timings_ms": timings,
+        "render_attempts": render_attempts,
     }
     if enhanced_artifact:
         manifest_data["enhanced_artifact"] = {
@@ -495,4 +557,5 @@ async def render_preview_pipeline(
             if hasattr(verification, "model_dump")
             else verification
         ),
+        render_attempts=render_attempts,
     )

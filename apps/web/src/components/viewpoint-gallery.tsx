@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import {
   RankedViewpoint,
   ViewpointPreviewState,
@@ -80,8 +81,7 @@ function PreviewRegion({
         <div
           style={{
             ...overlayStyle,
-            background:
-              "linear-gradient(135deg, rgba(30,30,60,0.9) 0%, rgba(40,40,80,0.9) 100%)",
+            background: "rgba(8, 10, 16, 0.9)",
           }}
         >
           <div
@@ -115,7 +115,7 @@ function PreviewRegion({
         <div
           style={{
             ...overlayStyle,
-            background: "rgba(127,29,29,0.5)",
+            background: "rgba(127, 29, 29, 0.4)",
           }}
         >
           <span style={{ fontSize: 12, color: "#fca5a5", marginBottom: 8 }}>
@@ -130,10 +130,10 @@ function PreviewRegion({
               padding: "4px 14px",
               fontSize: 12,
               fontWeight: 600,
-              backgroundColor: "rgba(239,68,68,0.7)",
+              backgroundColor: "rgba(239, 68, 68, 0.6)",
               color: "#fff",
-              border: "1px solid rgba(239,68,68,0.9)",
-              borderRadius: 4,
+              border: "none",
+              borderRadius: 6,
               cursor: "pointer",
             }}
           >
@@ -161,14 +161,14 @@ function PreviewRegion({
     );
   }
 
-  // idle: gray placeholder with composition + score overlay
+  // idle: placeholder with composition + score overlay
   return (
     <div style={containerStyle}>
       <div
         style={{
           ...overlayStyle,
           background:
-            "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
+            "linear-gradient(135deg, rgba(8, 10, 16, 0.95) 0%, rgba(16, 20, 30, 0.95) 100%)",
         }}
       >
         <span
@@ -183,7 +183,7 @@ function PreviewRegion({
         <span
           style={{
             marginTop: 4,
-            fontSize: 20,
+            fontSize: 18,
             fontWeight: 700,
             fontFamily: "monospace",
             color: "#ccc",
@@ -193,6 +193,56 @@ function PreviewRegion({
         </span>
       </div>
     </div>
+  );
+}
+
+function CopyLinkButton() {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      // Build URL from current page with the viewpoint selected
+      const url = new URL(window.location.href);
+      navigator.clipboard.writeText(url.toString()).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      });
+    },
+    [],
+  );
+
+  return (
+    <button
+      onClick={handleCopy}
+      title="Copy link to this viewpoint"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 24,
+        height: 24,
+        padding: 0,
+        border: "none",
+        borderRadius: 4,
+        backgroundColor: copied ? "rgba(34, 197, 94, 0.2)" : "rgba(255, 255, 255, 0.06)",
+        color: copied ? "#22c55e" : "#888",
+        cursor: "pointer",
+        transition: "all 150ms",
+        flexShrink: 0,
+      }}
+    >
+      {copied ? (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      ) : (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
+      )}
+    </button>
   );
 }
 
@@ -217,15 +267,24 @@ export default function ViewpointGallery({
       `}</style>
       <div
         style={{
-          padding: 16,
+          padding: "14px 16px",
           display: "flex",
           flexDirection: "column",
-          gap: 12,
+          gap: 8,
         }}
       >
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>
-          {isStyleMode ? "Styled " : ""}Viewpoints ({viewpoints.length})
-        </h3>
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            color: "#555",
+            marginBottom: 10,
+          }}
+        >
+          {isStyleMode ? "STYLED " : ""}VIEWPOINTS ({viewpoints.length})
+        </div>
 
         {viewpoints.map((vp) => {
           const isSelected = vp.id === selectedId;
@@ -242,14 +301,16 @@ export default function ViewpointGallery({
               key={vp.id}
               onClick={() => onSelect(vp.id)}
               style={{
-                borderRadius: 6,
-                border: `2px solid ${isSelected ? "#22d3ee" : "rgba(255,255,255,0.08)"}`,
+                borderRadius: 8,
+                border: isSelected
+                  ? "2px solid rgba(34, 211, 238, 0.4)"
+                  : "1px solid rgba(255, 255, 255, 0.06)",
                 backgroundColor: isSelected
-                  ? "rgba(34,211,238,0.06)"
-                  : "rgba(255,255,255,0.03)",
+                  ? "rgba(34, 211, 238, 0.04)"
+                  : "rgba(255, 255, 255, 0.02)",
                 cursor: "pointer",
                 overflow: "hidden",
-                transition: "border-color 0.15s, background-color 0.15s",
+                transition: "all 200ms",
               }}
             >
               {/* Preview region */}
@@ -260,49 +321,60 @@ export default function ViewpointGallery({
               />
 
               {/* Metadata below preview */}
-              <div style={{ padding: "10px 12px 12px" }}>
-                {/* Row 1: composition type + score */}
+              <div style={{ padding: "10px 12px" }}>
+                {/* Row 1: composition type + score + copy link */}
                 <div
                   style={{
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "center",
                     marginBottom: 6,
+                    gap: 6,
                   }}
                 >
-                  <span style={{ fontWeight: 600, fontSize: 13, color }}>
+                  <span style={{ fontWeight: 600, fontSize: 12, color }}>
                     {vp.composition}
                   </span>
-                  <span
-                    style={{
-                      fontFamily: "monospace",
-                      fontSize: 13,
-                      color: "#ccc",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {vp.score.toFixed(3)}
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span
+                      style={{
+                        fontFamily: "monospace",
+                        fontSize: 13,
+                        color: "#d0d0d0",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {vp.score.toFixed(3)}
+                    </span>
+                    {isSelected && <CopyLinkButton />}
+                  </div>
                 </div>
 
                 {/* Row 2: scene type */}
-                <div style={{ fontSize: 12, color: "#999", marginBottom: 4 }}>
+                <div style={{ fontSize: 11, color: "#666", marginBottom: 4 }}>
                   {vp.sceneType}
                 </div>
 
                 {/* Row 3: lat/lng */}
-                <div style={{ fontSize: 11, color: "#777", marginBottom: 3 }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontFamily: "monospace",
+                    color: "#555",
+                    marginBottom: 3,
+                  }}
+                >
                   {vp.camera.lat.toFixed(4)}, {vp.camera.lng.toFixed(4)}
                 </div>
 
                 {/* Row 4: altitude + heading */}
-                <div style={{ fontSize: 11, color: "#777", marginBottom: 3 }}>
+                <div style={{ fontSize: 11, color: "#555", marginBottom: 3 }}>
                   {vp.camera.altitudeMeters.toFixed(0)}m alt &middot;{" "}
                   {vp.camera.headingDegrees.toFixed(0)}&deg; heading
                 </div>
 
                 {/* Row 5: pitch */}
-                <div style={{ fontSize: 11, color: "#777", marginBottom: 6 }}>
+                <div style={{ fontSize: 11, color: "#555", marginBottom: 6 }}>
                   pitch {vp.camera.pitchDegrees.toFixed(1)}&deg;
                 </div>
 
@@ -319,13 +391,19 @@ export default function ViewpointGallery({
                         borderTop: "1px solid rgba(124,58,237,0.2)",
                       }}
                     >
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-                        <span style={{ color: "#7c3aed" }}>Styled</span>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          fontSize: 11,
+                        }}
+                      >
+                        <span style={{ color: "#8b5cf6" }}>Styled</span>
                         <span
                           style={{
                             fontSize: 10,
                             padding: "1px 6px",
-                            borderRadius: 3,
+                            borderRadius: 4,
                             backgroundColor:
                               styleVp.style.verificationStatus === "verified"
                                 ? "rgba(34,197,94,0.2)"
@@ -347,11 +425,24 @@ export default function ViewpointGallery({
                           {verification?.verificationStatus || styleVp.style.verificationStatus}
                         </span>
                       </div>
-                      <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontFamily: "monospace",
+                          color: "#666",
+                          marginTop: 2,
+                        }}
+                      >
                         patch: {styleVp.style.patchSimilarity.toFixed(3)} &middot;
                         contour: {styleVp.style.contourRefinement.toFixed(3)}
                       </div>
-                      <div style={{ fontSize: 11, color: "#666" }}>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontFamily: "monospace",
+                          color: "#666",
+                        }}
+                      >
                         base: {styleVp.baseScore.toFixed(3)} &middot;
                         style: {styleVp.style.preRenderScore.toFixed(3)}
                       </div>
@@ -361,7 +452,15 @@ export default function ViewpointGallery({
                         </div>
                       )}
                       {verification && verification.finalStyleScore != null && (
-                        <div style={{ fontSize: 11, color: "#7c3aed", marginTop: 2, fontWeight: 600 }}>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            fontFamily: "monospace",
+                            color: "#8b5cf6",
+                            marginTop: 2,
+                            fontWeight: 600,
+                          }}
+                        >
                           final: {verification.finalStyleScore.toFixed(3)}
                         </div>
                       )}
@@ -372,9 +471,7 @@ export default function ViewpointGallery({
                 {/* Top 3 score components */}
                 <div
                   style={{
-                    fontSize: 11,
-                    color: "#555",
-                    borderTop: "1px solid rgba(255,255,255,0.06)",
+                    borderTop: "1px solid rgba(255, 255, 255, 0.04)",
                     paddingTop: 6,
                   }}
                 >
@@ -387,8 +484,14 @@ export default function ViewpointGallery({
                         marginBottom: 2,
                       }}
                     >
-                      <span style={{ color: "#666" }}>{key}</span>
-                      <span style={{ fontFamily: "monospace", color: "#888" }}>
+                      <span style={{ fontSize: 10, color: "#555" }}>{key}</span>
+                      <span
+                        style={{
+                          fontFamily: "monospace",
+                          fontSize: 10,
+                          color: "#666",
+                        }}
+                      >
                         {val.toFixed(3)}
                       </span>
                     </div>

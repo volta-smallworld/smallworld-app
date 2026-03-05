@@ -1,4 +1,6 @@
 import { chromium, type Browser } from "playwright";
+import { PREVIEW_RENDER_BASE_URL } from "./urls";
+import { getPreviewCapabilities } from "./preview-capabilities";
 
 interface RenderParams {
   lat: number;
@@ -65,6 +67,38 @@ async function processQueue(): Promise<void> {
   }
 }
 
+function buildPayloadParam(params: RenderParams): string {
+  const capabilities = getPreviewCapabilities();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const payload: Record<string, any> = {
+    camera: {
+      lat: params.lat,
+      lng: params.lng,
+      altMeters: params.altitudeMeters,
+      headingDeg: params.headingDegrees,
+      pitchDeg: params.pitchDegrees,
+      rollDeg: params.rollDegrees,
+      fovDeg: params.fovDegrees,
+    },
+    viewport: {
+      width: RENDER_WIDTH,
+      height: RENDER_HEIGHT,
+    },
+  };
+
+  if (capabilities.provider === "google3d") {
+    payload.googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  } else if (capabilities.provider === "ionTerrain") {
+    payload.cesiumIonToken = process.env.NEXT_PUBLIC_CESIUM_ION_TOKEN;
+  }
+
+  // Encode as base64url (no padding characters that break URL params)
+  const json = JSON.stringify(payload);
+  const base64 = Buffer.from(json, "utf8").toString("base64");
+  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 async function doRender(params: RenderParams): Promise<Buffer> {
   const browser = await getBrowser();
   const page = await browser.newPage();
@@ -72,20 +106,10 @@ async function doRender(params: RenderParams): Promise<Buffer> {
   try {
     await page.setViewportSize({ width: RENDER_WIDTH, height: RENDER_HEIGHT });
 
-    const searchParams = new URLSearchParams({
-      lat: String(params.lat),
-      lng: String(params.lng),
-      altitudeMeters: String(params.altitudeMeters),
-      headingDegrees: String(params.headingDegrees),
-      pitchDegrees: String(params.pitchDegrees),
-      rollDegrees: String(params.rollDegrees),
-      fovDegrees: String(params.fovDegrees),
-    });
+    const payloadParam = buildPayloadParam(params);
+    const searchParams = new URLSearchParams({ payload: payloadParam });
 
-    // Use the app's own URL for the render page
-    const baseUrl =
-      process.env.PREVIEW_RENDER_BASE_URL || "http://localhost:3000";
-    const url = `${baseUrl}/preview/render?${searchParams.toString()}`;
+    const url = `${PREVIEW_RENDER_BASE_URL}/render/preview?${searchParams.toString()}`;
 
     await page.goto(url, {
       waitUntil: "domcontentloaded",

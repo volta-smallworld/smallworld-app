@@ -6,9 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Always use the Makefile** for starting, stopping, and managing the dev stack. If a Makefile target doesn't exist for what you need, add one. Use `/usr/bin/make` (the shell has a `make` autoload function that shadows it).
 
+Ports are configurable via Makefile variables (`API_PORT`, `MCP_PORT`, `WEB_PORT`). Override with env vars: `API_PORT=9090 /usr/bin/make up`. `make up` auto-generates `apps/web/.env.local` from the port vars.
+
 ```bash
 # Dev stack (preferred — manages all services with PID tracking)
-/usr/bin/make up                # Start API (:8080), MCP (:8001), Web (:3000) in background
+/usr/bin/make up                # Start API (:4180), MCP (:4181), Web (:4182) in background
 /usr/bin/make down              # Stop all services
 /usr/bin/make restart           # Stop + start all services
 /usr/bin/make status            # Show which services are running
@@ -43,26 +45,45 @@ Monorepo with two independent apps — no shared packages or cross-app imports. 
 - `src/smallworld_api/config.py` — `pydantic-settings` config (CORS origins, Terrarium URL, zoom, tile cap)
 - `src/smallworld_api/routes/terrain.py` — `POST /api/v1/terrain/elevation-grid`
 - `src/smallworld_api/services/tiles.py` — Pure geo math: center+radius→bounds, bounds→slippy-map tile range, tile bounds lookup
-- `src/smallworld_api/services/terrarium.py` — Full pipeline: fetch AWS Terrarium PNGs via httpx, decode RGB→elevation (`R*256+G+B/256-32768`), stitch tiles into mosaic, crop to bounds, resample to fixed 128×128 grid, compute stats
+- `src/smallworld_api/services/terrarium.py` — Full pipeline: fetch AWS Terrarium PNGs via httpx, decode RGB→elevation (`R*256+G+B/256-32768`), stitch tiles into mosaic, crop to bounds, bilinear resample to fixed 128×128 grid, compute stats. Includes LRU tile cache and fidelity metadata.
 - `src/smallworld_api/models/terrain.py` — Pydantic request/response models with validation (lat ±90, lng ±180, radius 1–50km)
 
 **`apps/web`** — Next.js 15 App Router (TypeScript, pnpm)
 - `src/app/page.tsx` — Client component orchestrating state (center, radius, fetch state, result/error)
-- `src/components/cesium-map.tsx` — Token-free Cesium globe with click-to-select and radius ellipse overlay. Uses `ImageryLayer` with `OpenStreetMapImageryProvider`, no Ion token.
+- `src/components/cesium-map.tsx` — Cesium globe with click-to-select and radius ellipse overlay. Supports Google Photorealistic 3D, Ion terrain, or OSM fallback.
 - `src/components/control-panel.tsx` — Lat/lng display, radius slider (1–50km), fetch button
 - `src/components/terrain-result-panel.tsx` — Displays elevation stats, grid info, bounds, tile count
 - `src/lib/api.ts` — `fetchElevationGrid()` calling the FastAPI backend
-- `src/lib/cesium.ts` — Sets `window.CESIUM_BASE_URL`, disables Ion token
+- `src/lib/cesium.ts` — Sets `window.CESIUM_BASE_URL`, provider resolution (`resolveMapProvider`), Google 3D/Ion/OSM capability detection
 - `next.config.mjs` — Webpack plugin copies Cesium assets (Workers, ThirdParty, Assets, Widgets) to `public/cesium/`
 
 ## Key Constraints
 
 - **Cesium assets** must exist at `public/cesium/` — the webpack copy plugin handles this during build, but the first `next dev` may need a build or page refresh
-- **CORS** is configured for `localhost:3000` and `127.0.0.1:3000` only — update `config.py` for other origins
-- **Tile cap**: max 36 tiles per request (configurable via `MAX_TILES_PER_REQUEST` env var) — returns 422 if exceeded
+- **CORS** is configured for `localhost:4182` and `127.0.0.1:4182` only — update `config.py` for other origins
+- **Tile cap**: max 64 tiles per request (configurable via `MAX_TILES_PER_REQUEST` env var) — returns 422 if exceeded
 - **Grid size**: always 128×128, hardcoded in `terrarium.py` as `GRID_SIZE`
-- **Zoom level**: default 12, configurable via `DEFAULT_TERRARIUM_ZOOM` env var
-- Web reads `NEXT_PUBLIC_API_BASE_URL` (defaults to `http://localhost:8080`); API reads `.env` via pydantic-settings
+- **Zoom level**: default 13, configurable via `DEFAULT_TERRARIUM_ZOOM` env var
+- **Resample method**: bilinear interpolation (scipy.ndimage.zoom, order=1)
+- **Tile cache**: in-memory LRU cache (512 tiles, 5min TTL) for decoded elevation arrays
+- Web reads `NEXT_PUBLIC_API_BASE_URL` (defaults to `http://localhost:4180`); API reads `.env` via pydantic-settings
+- **Chat inference** uses DeepSeek (`deepseek-chat` model) via `DEEPSEEK_API_KEY` in root `.env`. `make gen-env` forwards it to the web app's `.env.local`.
+- **Map provider priority**: `google3d` → `ionTerrain` → `osm` (determined by available API keys)
+- **Preview provider fallback**: `google_3d` → `ion` → `osm` (backend preview rendering, with retry and attempts metadata)
+
+## Provider Keys
+
+The system uses split keys — browser-facing and backend-only:
+
+| Purpose | Root `.env` key | Browser key (auto-generated by `make gen-env`) |
+|---|---|---|
+| Google Photorealistic 3D Tiles | `GOOGLE_MAPS_API_KEY` | `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` |
+| Cesium Ion terrain + imagery | `CESIUM_ION_TOKEN` | `NEXT_PUBLIC_CESIUM_ION_TOKEN` |
+
+- **Browser keys** are used by the interactive map (`cesium-map.tsx`) and resolved in `cesium.ts`.
+- **Backend keys** are used by the preview render pipeline (`preview_renderer.py` → `previews.py`).
+- **Google browser key** must be referrer-restricted (prod and staging domains) before production use.
+- **No-key experience** is fully functional — OSM + ellipsoid fallback works without any keys.
 
 ## Testing Patterns
 
@@ -71,3 +92,5 @@ Backend tests use `FastAPI.TestClient` with `unittest.mock.patch` to mock the se
 ## Documentation
 
 Architecture decisions are recorded in `ai/adr/` following the template in `ai/adr/_template.md`. Plans live in `ai/plans/`.
+
+**`ai/docs/pipeline-reference.md`** is a living document that tracks the full AI pipeline: every stage, service, API endpoint, MCP tool, config setting, and data flow. **Update it whenever you add, modify, or remove pipeline functionality.** When adding a significant architectural decision, also create an ADR in `ai/adr/` and update the ADR index in `ai/adr/README.md`.

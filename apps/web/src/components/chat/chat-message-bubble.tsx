@@ -4,32 +4,72 @@ import type { ChatMessage, ToolRun } from "@/types/chat";
 import styles from "@/app/chat/chat.module.css";
 
 /** Extract preview image URLs from tool run outputs. */
-function extractPreviewImages(toolRuns?: ToolRun[]): string[] {
-  if (!toolRuns) return [];
-  const urls: string[] = [];
-  for (const run of toolRuns) {
+function didUserRequestRawPreview(message?: string): boolean {
+  if (!message) return false;
+  const text = message.toLowerCase();
+  return (
+    /\braw\b/.test(text) ||
+    /\bunenhanced\b/.test(text) ||
+    /\boriginal\b/.test(text) ||
+    /without enhancement/.test(text) ||
+    /no enhancement/.test(text)
+  );
+}
+
+/** Select the single preview image URL that should be shown for this message. */
+function extractPreviewImage(
+  toolRuns: ToolRun[] | undefined,
+  allowRaw: boolean
+): string | null {
+  if (!toolRuns || toolRuns.length === 0) return null;
+
+  for (let i = toolRuns.length - 1; i >= 0; i -= 1) {
+    const run = toolRuns[i];
     if (run.toolName !== "preview_render_pose" || run.isError) continue;
+
     try {
       const data = JSON.parse(run.output);
       const previewId = data.id as string | undefined;
       if (!previewId) continue;
-      const variant = data.enhanced_image ? "enhanced" : "raw";
-      urls.push(`/api/previews/${previewId}/${variant}`);
+
+      const hasRaw = Boolean(data.raw_image);
+      const hasEnhanced = Boolean(data.enhanced_image);
+
+      if (allowRaw) {
+        if (hasRaw) {
+          return `/api/previews/${previewId}/raw`;
+        }
+        continue;
+      }
+      if (hasEnhanced) {
+        return `/api/previews/${previewId}/enhanced`;
+      }
     } catch {
       // not JSON, skip
     }
   }
-  return urls;
+
+  return null;
 }
 
 interface ChatMessageBubbleProps {
   message: ChatMessage;
   onToolClick: (runs: ToolRun[]) => void;
+  precedingUserMessage?: string;
 }
 
-export function ChatMessageBubble({ message, onToolClick }: ChatMessageBubbleProps) {
-  const previewImages =
-    message.role === "assistant" ? extractPreviewImages(message.toolRuns) : [];
+export function ChatMessageBubble({
+  message,
+  onToolClick,
+  precedingUserMessage,
+}: ChatMessageBubbleProps) {
+  const previewImage =
+    message.role === "assistant"
+      ? extractPreviewImage(
+          message.toolRuns,
+          didUserRequestRawPreview(precedingUserMessage)
+        )
+      : null;
 
   return (
     <div className={`${styles.messageGroup} ${
@@ -42,7 +82,13 @@ export function ChatMessageBubble({ message, onToolClick }: ChatMessageBubblePro
       >
         {message.role === "assistant" ? (
           <div className={styles.markdown}>
-            <ReactMarkdown>{message.content}</ReactMarkdown>
+            <ReactMarkdown
+              components={{
+                img: () => null,
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
           </div>
         ) : (
           message.content
@@ -58,19 +104,16 @@ export function ChatMessageBubble({ message, onToolClick }: ChatMessageBubblePro
           </div>
         )}
       </div>
-      {previewImages.length > 0 && (
+      {previewImage && (
         <div className={styles.previewImages}>
-          {previewImages.map((url, i) => (
-            <Image
-              key={i}
-              src={url}
-              alt="Preview render"
-              className={styles.previewImage}
-              width={500}
-              height={333}
-              unoptimized
-            />
-          ))}
+          <Image
+            src={previewImage}
+            alt="Preview render"
+            className={styles.previewImage}
+            width={500}
+            height={333}
+            unoptimized
+          />
         </div>
       )}
     </div>

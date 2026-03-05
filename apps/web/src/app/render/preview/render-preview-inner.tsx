@@ -3,6 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
+/**
+ * Explicit tile-source provider hint from the backend.
+ *
+ * - ``"google_3d"`` — Google Photorealistic 3D Tiles.
+ * - ``"ion"``       — Cesium Ion world terrain + imagery.
+ * - ``"osm"``       — OpenStreetMap imagery on an ellipsoid.
+ *
+ * When omitted the component falls back to the legacy auto-detect
+ * behaviour (presence of ``googleMapsApiKey`` / ``cesiumIonToken``).
+ */
+type ProviderHint = "google_3d" | "ion" | "osm";
+
 interface RenderPayload {
   camera: {
     lat: number;
@@ -20,6 +32,8 @@ interface RenderPayload {
   cesiumIonToken?: string;
   mapboxAccessToken?: string;
   googleMapsApiKey?: string;
+  /** Explicit provider hint — takes precedence over key-sniffing. */
+  provider?: ProviderHint;
   anchors?: Array<{
     id: string;
     lat: number;
@@ -28,6 +42,11 @@ interface RenderPayload {
     desiredNormalizedX: number;
     desiredNormalizedY: number;
   }>;
+  safety?: {
+    aglFloorMeters: number;
+    enabled: boolean;
+    sampleTimeoutMs: number;
+  };
 }
 
 declare global {
@@ -41,6 +60,13 @@ declare global {
         desiredNormalizedX: number;
         desiredNormalizedY: number;
       }>;
+      terrainClamp?: {
+        sampled: boolean;
+        groundMeters: number | null;
+        wasClamped: boolean;
+        appliedAltMeters: number | null;
+        retried: boolean;
+      };
     };
     CESIUM_BASE_URL?: string;
   }
@@ -95,13 +121,30 @@ export default function RenderPreviewInner() {
 
         if (cancelled || !containerRef.current) return;
 
-        const useGoogle3D = !!payload.googleMapsApiKey;
+        // ── Resolve effective provider ───────────────────────────────────
+        // When the backend supplies an explicit ``provider`` hint we use it
+        // directly.  Otherwise fall back to legacy key-sniffing so that
+        // existing callers continue to work without changes.
+        let effectiveProvider: ProviderHint;
+        if (payload.provider) {
+          effectiveProvider = payload.provider;
+        } else if (payload.googleMapsApiKey) {
+          effectiveProvider = "google_3d";
+        } else if (payload.cesiumIonToken) {
+          effectiveProvider = "ion";
+        } else {
+          effectiveProvider = "osm";
+        }
 
-        // Set up terrain provider — when using Google 3D Tiles, use ellipsoid
-        // since the tileset includes its own geometry
+        const useGoogle3D = effectiveProvider === "google_3d";
+        const useIon = effectiveProvider === "ion";
+
+        // Set up terrain provider based on resolved provider.
+        // Google 3D Tiles include their own geometry so we use ellipsoid.
+        // Ion provides world terrain. OSM uses ellipsoid.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let terrainProvider: any;
-        if (!useGoogle3D && payload.cesiumIonToken) {
+        if (useIon && payload.cesiumIonToken) {
           terrainProvider = await Cesium.createWorldTerrainAsync();
         } else {
           terrainProvider = new Cesium.EllipsoidTerrainProvider();
@@ -110,10 +153,16 @@ export default function RenderPreviewInner() {
         if (cancelled) return;
 
         // Set up imagery provider — skip when using Google 3D Tiles
+        // (the 3D tileset provides its own imagery).
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let imageryProvider: any = null;
         if (!useGoogle3D) {
-          if (payload.mapboxAccessToken) {
+          if (useIon && payload.cesiumIonToken) {
+            // Ion provides high-quality Bing-based satellite imagery via
+            // the default Ion imagery provider.
+            imageryProvider =
+              await Cesium.IonImageryProvider.fromAssetId(2);
+          } else if (payload.mapboxAccessToken) {
             imageryProvider = new Cesium.MapboxStyleImageryProvider({
               styleId: "satellite-v9",
               accessToken: payload.mapboxAccessToken,
@@ -242,8 +291,114 @@ export default function RenderPreviewInner() {
           if (globeReady && tilesetReady) {
             // Render one more frame to be safe
             viewer.scene.requestRender();
-            setTimeout(() => {
+            setTimeout(async () => {
               if (cancelled) return;
+
+              // ── Terrain clamp safety ──────────────────────────
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              let terrainClampResult: any = {
+                sampled: false,
+                groundMeters: null,
+                wasClamped: false,
+                appliedAltMeters: null,
+                retried: false,
+              };
+
+              if (payload.safety?.enabled) {
+                const aglFloor = payload.safety.aglFloorMeters;
+                const timeoutMs = payload.safety.sampleTimeoutMs;
+                const camPos = viewer.camera.positionCartographic;
+                const camLng = Cesium.Math.toDegrees(camPos.longitude);
+                const camLat = Cesium.Math.toDegrees(camPos.latitude);
+                const camAlt = camPos.height;
+
+                const attemptSample = async (retry: boolean) => {
+                  try {
+                    let groundHeight: number;
+                    // Use scene.sampleHeightMostDetailed for Google 3D (globe hidden),
+                    // otherwise use sampleTerrainMostDetailed
+                    if (useGoogle3D) {
+                      const positions = [
+                        Cesium.Cartographic.fromDegrees(camLng, camLat),
+                      ];
+                      const samplePromise =
+                        viewer.scene.sampleHeightMostDetailed(positions);
+                      const result = await Promise.race([
+                        samplePromise,
+                        new Promise<null>((_, reject) =>
+                          setTimeout(
+                            () => reject(new Error("sample timeout")),
+                            timeoutMs
+                          )
+                        ),
+                      ]);
+                      if (!result) throw new Error("sample timeout");
+                      groundHeight = positions[0].height;
+                    } else {
+                      const positions = [
+                        Cesium.Cartographic.fromDegrees(camLng, camLat),
+                      ];
+                      const terrainProv = viewer.terrainProvider;
+                      const samplePromise =
+                        Cesium.sampleTerrainMostDetailed(
+                          terrainProv,
+                          positions
+                        );
+                      const result = await Promise.race([
+                        samplePromise,
+                        new Promise<null>((_, reject) =>
+                          setTimeout(
+                            () => reject(new Error("sample timeout")),
+                            timeoutMs
+                          )
+                        ),
+                      ]);
+                      if (!result) throw new Error("sample timeout");
+                      groundHeight = positions[0].height;
+                    }
+
+                    const minAlt = groundHeight + aglFloor;
+                    const wasClamped = camAlt < minAlt;
+                    const appliedAlt = wasClamped ? minAlt : camAlt;
+
+                    if (wasClamped) {
+                      // Re-set camera view with clamped altitude
+                      viewer.camera.setView({
+                        destination: Cesium.Cartesian3.fromDegrees(
+                          camLng,
+                          camLat,
+                          appliedAlt
+                        ),
+                        orientation: {
+                          heading: viewer.camera.heading,
+                          pitch: viewer.camera.pitch,
+                          roll: viewer.camera.roll,
+                        },
+                      });
+                      // Render one more frame after clamp
+                      viewer.scene.requestRender();
+                      await new Promise((r) => setTimeout(r, 200));
+                    }
+
+                    terrainClampResult = {
+                      sampled: true,
+                      groundMeters: Math.round(groundHeight * 100) / 100,
+                      wasClamped,
+                      appliedAltMeters:
+                        Math.round(appliedAlt * 100) / 100,
+                      retried: retry,
+                    };
+                  } catch {
+                    if (!retry) {
+                      // Retry once
+                      await attemptSample(true);
+                    }
+                    // If retry also fails, leave terrainClampResult as default (sampled: false)
+                  }
+                };
+
+                await attemptSample(false);
+              }
 
               // Compute anchor projections
               if (payload.anchors && payload.anchors.length > 0) {
@@ -267,12 +422,13 @@ export default function RenderPreviewInner() {
                     desiredNormalizedY: anchor.desiredNormalizedY,
                   };
                 });
-                window.__SMALLWORLD_FRAME_STATE__ = { anchors: frameState };
+                window.__SMALLWORLD_FRAME_STATE__ = { anchors: frameState, terrainClamp: terrainClampResult };
               } else {
-                window.__SMALLWORLD_FRAME_STATE__ = { anchors: [] };
+                window.__SMALLWORLD_FRAME_STATE__ = { anchors: [], terrainClamp: terrainClampResult };
               }
 
               window.__SMALLWORLD_RENDER_READY__ = true;
+              document.body.dataset.previewReady = "true";
             }, 500);
           } else {
             requestAnimationFrame(checkReady);
@@ -285,6 +441,8 @@ export default function RenderPreviewInner() {
         setError(message);
         window.__SMALLWORLD_RENDER_ERROR__ = message;
         window.__SMALLWORLD_RENDER_READY__ = true;
+        document.body.dataset.previewError = message;
+        document.body.dataset.previewReady = "true";
       }
     }
 

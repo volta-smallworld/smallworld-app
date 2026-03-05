@@ -19,6 +19,7 @@ def server_info() -> str:
             "terrain_analyze_area",
             "terrain_find_viewpoints",
             "preview_render_pose",
+            "terrain_point_context",
         ],
         "terrain_defaults": {
             "zoom": settings.default_terrarium_zoom,
@@ -71,6 +72,16 @@ def usage_guidance() -> str:
                     "Optionally override viewport dimensions or enhancement settings."
                 ),
             },
+            {
+                "step": "optional",
+                "tool": "terrain_point_context",
+                "purpose": "Get precise ground elevation at a point and check camera AGL safety.",
+                "notes": (
+                    "Use this to verify a camera is not underground before rendering. "
+                    "Pass camera_altitude_meters to get AGL clearance. "
+                    "Also returns local slope, curvature, and relief context."
+                ),
+            },
         ],
         "tips": [
             "Viewpoints are ranked by a multi-factor beauty score. Higher scores are better.",
@@ -79,6 +90,7 @@ def usage_guidance() -> str:
             "Compositions use snake_case: rule_of_thirds, golden_ratio, leading_line, symmetry.",
             "preview_render_pose can render without anchors; missing anchor ids and normalized positions are inferred.",
             "preview_render_pose returns metadata by default. Set include_images=true to include base64 image data in the tool response. The chat UI renders images via proxy routes /api/previews/{id}/raw and /api/previews/{id}/enhanced — not from inline base64 data.",
+            "Use terrain_point_context to check whether a camera pose is underground before rendering. Negative camera_agl_meters means the camera is inside terrain.",
             "Terrain tools automatically reduce zoom when a large radius would exceed the tile cap. Check zoom_used in the response.",
             "Craft a scene-specific enhancement prompt based on the terrain context (lighting, season, atmosphere, time of day). System guardrails protecting terrain fidelity are prepended automatically — your prompt only needs creative direction.",
             "Enhancement requires GEMINI_API_KEY. Without a custom prompt the default creative prompt (golden hour, cinematic grading) is used.",

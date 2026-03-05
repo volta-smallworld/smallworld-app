@@ -6,6 +6,7 @@ import { ChatHeader } from "@/components/chat/chat-header";
 import { MessageList } from "@/components/chat/message-list";
 import { ChatComposer } from "@/components/chat/chat-composer";
 import { ToolInspector } from "@/components/chat/tool-inspector";
+import { generateId } from "@/hooks/use-session-id";
 import styles from "./chat.module.css";
 
 const STORAGE_KEY = "smallworld-chat-history";
@@ -43,14 +44,14 @@ export default function ChatPage() {
       if (isLoading) return;
 
       const userMessage: ChatMessage = {
-        id: crypto.randomUUID(),
+        id: generateId(),
         role: "user",
         content: text,
         timestamp: Date.now(),
       };
 
       // Add a pending assistant message immediately
-      const assistantId = crypto.randomUUID();
+      const assistantId = generateId();
       const pendingAssistant: ChatMessage = {
         id: assistantId,
         role: "assistant",

@@ -6,6 +6,8 @@ import {
   OpenStreetMapImageryProvider,
 } from "cesium";
 
+export { OpenStreetMapImageryProvider };
+
 let initialized = false;
 
 /**
@@ -83,12 +85,52 @@ export function hasPreviewTerrainSupport(): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Provider resolution
+// ---------------------------------------------------------------------------
+
+export type MapProvider = "google3d" | "ionTerrain" | "osm";
+
+export interface ProviderResolution {
+  activeProvider: MapProvider;
+  availableProviders: MapProvider[];
+  providerOrder: MapProvider[];
+}
+
+/**
+ * Resolve the active map provider based on available API keys / tokens.
+ *
+ * Priority: google3d > ionTerrain > osm
+ *
+ * - `google3d`    — `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` is set
+ * - `ionTerrain`  — `NEXT_PUBLIC_CESIUM_ION_TOKEN` is set
+ * - `osm`         — always available (no key required)
+ *
+ * The result is deterministic: same env vars always produce the same output.
+ */
+export function resolveMapProvider(): ProviderResolution {
+  const providerOrder: MapProvider[] = ["google3d", "ionTerrain", "osm"];
+  const available: MapProvider[] = [];
+
+  if (getGoogleMapsApiKey()) available.push("google3d");
+  if (getIonToken()) available.push("ionTerrain");
+  available.push("osm"); // always available
+
+  const activeProvider = available[0];
+
+  return {
+    activeProvider,
+    availableProviders: available,
+    providerOrder,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Imagery providers
 // ---------------------------------------------------------------------------
 
 /**
- * Create an OpenStreetMap imagery provider.  Kept for backward compatibility
- * and as the fallback when no Ion token is available.
+ * Create an OpenStreetMap imagery provider.  Used as base layer for the
+ * interactive map and as fallback when no Ion token is available.
  */
 export function createOsmImageryProvider() {
   return new OpenStreetMapImageryProvider({
@@ -97,20 +139,7 @@ export function createOsmImageryProvider() {
 }
 
 /**
- * Primary imagery provider used during normal map interaction.
- *
- * Always uses OpenStreetMap tiles to keep the interactive map token-free.
- * Ion imagery is only used in preview/scene-generation via createPreviewImageryProvider.
- */
-export async function createPrimaryImageryProvider(): Promise<
-  IonImageryProvider | OpenStreetMapImageryProvider
-> {
-  return createOsmImageryProvider();
-}
-
-/**
- * Imagery provider for preview / scene-generation pages.  Mirrors the primary
- * provider logic so previews match the main map experience.
+ * Imagery provider for preview / scene-generation pages.
  *
  * - **Ion token set** -> Bing Maps aerial via `IonImageryProvider` (asset 2).
  * - **No token**      -> OpenStreetMap tiles.
@@ -127,19 +156,6 @@ export async function createPreviewImageryProvider(): Promise<
 // ---------------------------------------------------------------------------
 // Terrain providers
 // ---------------------------------------------------------------------------
-
-/**
- * Primary terrain provider for normal map interaction.
- *
- * Always returns undefined to keep the interactive map token-free (uses the WGS84
- * ellipsoid). Ion terrain is only used in preview/scene-generation via
- * createPreviewTerrainProvider.
- */
-export async function createPrimaryTerrainProvider(): Promise<
-  CesiumTerrainProvider | undefined
-> {
-  return undefined;
-}
 
 /**
  * Terrain provider for preview / scene-generation pages.  Uses Ion terrain

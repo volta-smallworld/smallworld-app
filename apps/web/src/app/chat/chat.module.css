@@ -137,6 +137,13 @@
   font-size: 12px;
 }
 
+.markdown img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 6px;
+}
+
 .previewImages {
   display: flex;
   flex-direction: column;

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
+import { API_BASE_URL } from "@/lib/server/urls";
 
 export const runtime = "nodejs";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
 export async function GET(
   _request: Request,
@@ -16,7 +15,7 @@ export async function GET(
 
   try {
     const upstream = await fetch(
-      `${API_BASE}/api/v1/previews/${previewId}/artifacts/${variant}`
+      `${API_BASE_URL}/api/v1/previews/${previewId}/artifacts/${variant}`
     );
 
     if (!upstream.ok) {

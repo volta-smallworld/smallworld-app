@@ -5,7 +5,7 @@
  * Returns null in production builds.
  */
 export function DevSessionBadge({ sessionId }: { sessionId: string }) {
-  if (process.env.NODE_ENV === "production") return null;
+  if (process.env.NODE_ENV === "production" || !sessionId) return null;
 
   return (
     <span

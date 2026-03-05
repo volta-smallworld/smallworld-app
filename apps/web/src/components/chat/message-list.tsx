@@ -25,9 +25,22 @@ export function MessageList({ messages, isLoading, error, onToolClick, activeToo
 
   return (
     <div className={styles.messages} ref={containerRef}>
-      {messages.map((msg) => (
-        <ChatMessageBubble key={msg.id} message={msg} onToolClick={onToolClick} />
-      ))}
+      {(() => {
+        let precedingUserMessage: string | undefined;
+        return messages.map((msg) => {
+          if (msg.role === "user") {
+            precedingUserMessage = msg.content;
+          }
+          return (
+            <ChatMessageBubble
+              key={msg.id}
+              message={msg}
+              onToolClick={onToolClick}
+              precedingUserMessage={precedingUserMessage}
+            />
+          );
+        });
+      })()}
       {isLoading && (
         <div className={styles.loading}>
           <span className={styles.dot} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Viewer,
   Cartesian2,
@@ -11,14 +11,17 @@ import {
   Cartographic,
   Math as CesiumMath,
   Entity,
+  CesiumTerrainProvider,
+  IonImageryProvider,
 } from "cesium";
 import "cesium/Build/Cesium/Widgets/widgets.css";
 import {
   initCesium,
-  createPrimaryTerrainProvider,
-  createPrimaryImageryProvider,
+  OpenStreetMapImageryProvider,
   hasGoogle3DTilesSupport,
   createGoogle3DTileset,
+  resolveMapProvider,
+  type MapProvider,
 } from "@/lib/cesium";
 import {
   LatLng,
@@ -26,6 +29,14 @@ import {
   TerrainAnalysisResponse,
   ViewpointSearchResponse,
 } from "@/types/terrain";
+
+interface InitialCamera {
+  lat: number;
+  lng: number;
+  altitudeMeters: number;
+  headingDegrees: number;
+  pitchDegrees: number;
+}
 
 interface CesiumMapProps {
   center: LatLng | null;
@@ -35,6 +46,7 @@ interface CesiumMapProps {
   overlays: Record<AnalysisOverlayKey, boolean>;
   viewpointResult: ViewpointSearchResponse | null;
   selectedViewpointId: string | null;
+  initialCamera?: InitialCamera;
 }
 
 export default function CesiumMap({
@@ -45,6 +57,7 @@ export default function CesiumMap({
   overlays,
   viewpointResult,
   selectedViewpointId,
+  initialCamera,
 }: CesiumMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<Viewer | null>(null);
@@ -52,9 +65,12 @@ export default function CesiumMap({
   const ellipseRef = useRef<Entity | null>(null);
   const overlayEntitiesRef = useRef<Entity[]>([]);
   const viewpointEntitiesRef = useRef<Entity[]>([]);
+  const [activeProvider, setActiveProvider] = useState<MapProvider>("osm");
 
   const onSelectCenterRef = useRef(onSelectCenter);
   onSelectCenterRef.current = onSelectCenter;
+
+  const initialCameraRef = useRef(initialCamera);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -65,13 +81,9 @@ export default function CesiumMap({
     async function setupViewer() {
       initCesium();
 
-      const terrainProvider = await createPrimaryTerrainProvider();
-      const imageryProvider = await createPrimaryImageryProvider();
-
       if (destroyed || !containerRef.current) return;
 
       const viewer = new Viewer(containerRef.current, {
-        terrainProvider: terrainProvider || undefined,
         baseLayerPicker: false,
         geocoder: false,
         homeButton: false,
@@ -85,23 +97,29 @@ export default function CesiumMap({
         creditContainer: document.createElement("div"),
       });
 
-      // Replace default imagery with the capability-aware provider
+      // Start with OSM as the base layer (visible while 3D tiles load)
       viewer.imageryLayers.removeAll();
-      viewer.imageryLayers.addImageryProvider(imageryProvider);
-
-      // Load Google Photorealistic 3D Tiles when available
-      if (hasGoogle3DTilesSupport()) {
-        try {
-          const tileset = await createGoogle3DTileset();
-          if (!destroyed) {
-            viewer.scene.primitives.add(tileset);
-          }
-        } catch (e) {
-          console.warn("Failed to load Google 3D Tiles:", e);
-        }
-      }
+      viewer.imageryLayers.addImageryProvider(
+        new OpenStreetMapImageryProvider({
+          url: "https://tile.openstreetmap.org/",
+        })
+      );
 
       viewerRef.current = viewer;
+
+      // Fly to initial camera pose from URL params
+      const ic = initialCameraRef.current;
+      if (ic) {
+        viewer.camera.flyTo({
+          destination: Cartesian3.fromDegrees(ic.lng, ic.lat, ic.altitudeMeters),
+          orientation: {
+            heading: CesiumMath.toRadians(ic.headingDegrees),
+            pitch: CesiumMath.toRadians(ic.pitchDegrees),
+            roll: 0,
+          },
+          duration: 0, // instant on load
+        });
+      }
 
       handler = new ScreenSpaceEventHandler(viewer.scene.canvas);
       handler.setInputAction((event: { position: Cartesian2 }) => {
@@ -130,6 +148,45 @@ export default function CesiumMap({
           lng: CesiumMath.toDegrees(carto.longitude),
         });
       }, ScreenSpaceEventType.LEFT_CLICK);
+
+      // Upgrade map fidelity based on available providers
+      const { activeProvider: resolved } = resolveMapProvider();
+
+      if (resolved === "google3d") {
+        // Google Photorealistic 3D Tiles — non-blocking background load
+        createGoogle3DTileset()
+          .then((tileset) => {
+            if (!destroyed) {
+              viewer.scene.primitives.add(tileset);
+              // Hide the globe — the 3D tileset provides its own terrain surface
+              // and imagery; the ellipsoid + OSM would z-fight with it
+              viewer.scene.globe.show = false;
+              viewer.imageryLayers.removeAll();
+              setActiveProvider("google3d");
+            }
+          })
+          .catch((e) => {
+            console.warn("Failed to load Google 3D Tiles, keeping OSM fallback:", e);
+          });
+      } else if (resolved === "ionTerrain") {
+        // Ion World Terrain + Ion satellite imagery — non-blocking upgrade
+        Promise.all([
+          CesiumTerrainProvider.fromIonAssetId(1),
+          IonImageryProvider.fromAssetId(2),
+        ])
+          .then(([terrainProvider, imageryProvider]) => {
+            if (!destroyed) {
+              viewer.terrainProvider = terrainProvider;
+              viewer.imageryLayers.removeAll();
+              viewer.imageryLayers.addImageryProvider(imageryProvider);
+              setActiveProvider("ionTerrain");
+            }
+          })
+          .catch((e) => {
+            console.warn("Failed to load Ion terrain/imagery, keeping OSM fallback:", e);
+          });
+      }
+      // else: OSM + ellipsoid already configured — nothing extra to do
     }
 
     setupViewer();
@@ -370,10 +427,35 @@ export default function CesiumMap({
     });
   }, [selectedViewpointId, viewpointResult]);
 
+  const providerLabel: Record<MapProvider, string> = {
+    google3d: "Google 3D",
+    ionTerrain: "Ion Terrain",
+    osm: "OSM",
+  };
+
   return (
-    <div
-      ref={containerRef}
-      style={{ width: "100%", height: "100%", position: "relative" }}
-    />
+    <div style={{ width: "100%", height: "100%", position: "relative" }}>
+      <div
+        ref={containerRef}
+        style={{ width: "100%", height: "100%" }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          bottom: 8,
+          left: 8,
+          background: "rgba(0, 0, 0, 0.55)",
+          color: "#ccc",
+          fontSize: 11,
+          padding: "2px 6px",
+          borderRadius: 4,
+          pointerEvents: "none",
+          userSelect: "none",
+          zIndex: 1,
+        }}
+      >
+        {providerLabel[activeProvider]}
+      </div>
+    </div>
   );
 }

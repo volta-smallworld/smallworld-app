@@ -8,8 +8,16 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 logger = logging.getLogger(__name__)
+
+# Default preview resolution — 1920x1080 for high-fidelity output.
+DEFAULT_RENDER_WIDTH = 1920
+DEFAULT_RENDER_HEIGHT = 1080
+
+# Provider type used throughout the render pipeline.
+ProviderName = Literal["google_3d", "ion", "osm"]
 
 
 @dataclass
@@ -26,13 +34,18 @@ class RenderTimeoutError(Exception):
     """Raised when the render subprocess times out."""
 
 
-_SCRIPT_PATH = (
-    Path(__file__).resolve().parent.parent.parent.parent.parent.parent
-    / "apps"
-    / "web"
-    / "scripts"
-    / "render-preview.mjs"
-)
+def _resolve_script_path() -> Path:
+    from smallworld_api.config import settings
+
+    if settings.render_script_path:
+        return Path(settings.render_script_path)
+    return (
+        Path(__file__).resolve().parent.parent.parent.parent.parent.parent
+        / "apps"
+        / "web"
+        / "scripts"
+        / "render-preview.mjs"
+    )
 
 
 async def render_preview(
@@ -52,8 +65,28 @@ async def render_preview(
     cesium_ion_token: str = "",
     mapbox_access_token: str = "",
     google_maps_api_key: str = "",
+    agl_floor_meters: float | None = None,
+    terrain_clamp_enabled: bool | None = None,
+    terrain_sample_timeout_ms: int | None = None,
+    provider: ProviderName | None = None,
 ) -> RenderResult:
-    payload = {
+    """Render a preview screenshot via the headless Cesium renderer.
+
+    Parameters
+    ----------
+    provider
+        Explicit tile-source provider to use for this render.
+
+        * ``"google_3d"`` — Google Photorealistic 3D Tiles (requires
+          *google_maps_api_key*).
+        * ``"ion"``       — Cesium Ion world terrain + imagery (requires
+          *cesium_ion_token*).
+        * ``"osm"``       — OpenStreetMap imagery on an ellipsoid.  No
+          external keys needed.
+        * ``None``        — Legacy behaviour: pass whatever keys are
+          provided and let the frontend decide.
+    """
+    payload: dict = {
         "camera": {
             "lat": camera_lat,
             "lng": camera_lng,
@@ -65,12 +98,39 @@ async def render_preview(
         },
         "viewport": {"width": viewport_width, "height": viewport_height},
     }
-    if cesium_ion_token:
-        payload["cesiumIonToken"] = cesium_ion_token
-    if mapbox_access_token:
-        payload["mapboxAccessToken"] = mapbox_access_token
-    if google_maps_api_key:
-        payload["googleMapsApiKey"] = google_maps_api_key
+
+    # ── Provider-aware key injection ──────────────────────────────────────
+    # When an explicit *provider* is given we only include the keys that
+    # the provider needs and set the ``provider`` hint so the frontend
+    # component can take the fast path.
+    if provider == "google_3d":
+        if google_maps_api_key:
+            payload["googleMapsApiKey"] = google_maps_api_key
+        payload["provider"] = "google_3d"
+    elif provider == "ion":
+        if cesium_ion_token:
+            payload["cesiumIonToken"] = cesium_ion_token
+        if mapbox_access_token:
+            payload["mapboxAccessToken"] = mapbox_access_token
+        payload["provider"] = "ion"
+    elif provider == "osm":
+        payload["provider"] = "osm"
+    else:
+        # Legacy behaviour — forward all available keys
+        if cesium_ion_token:
+            payload["cesiumIonToken"] = cesium_ion_token
+        if mapbox_access_token:
+            payload["mapboxAccessToken"] = mapbox_access_token
+        if google_maps_api_key:
+            payload["googleMapsApiKey"] = google_maps_api_key
+
+    # Renderer-side terrain clamp safety block
+    if terrain_clamp_enabled is not None or agl_floor_meters is not None:
+        payload["safety"] = {
+            "aglFloorMeters": agl_floor_meters if agl_floor_meters is not None else 5.0,
+            "enabled": terrain_clamp_enabled if terrain_clamp_enabled is not None else True,
+            "sampleTimeoutMs": terrain_sample_timeout_ms if terrain_sample_timeout_ms is not None else 3000,
+        }
 
     encoded = base64.urlsafe_b64encode(
         json.dumps(payload).encode()
@@ -80,7 +140,7 @@ async def render_preview(
 
     cmd = [
         "node",
-        str(_SCRIPT_PATH),
+        str(_resolve_script_path()),
         "--url",
         render_url,
         "--output",
@@ -93,7 +153,7 @@ async def render_preview(
         str(timeout_ms),
     ]
 
-    logger.info("Launching render: %s", " ".join(cmd))
+    logger.info("Launching render (provider=%s): %s", provider or "auto", " ".join(cmd))
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,

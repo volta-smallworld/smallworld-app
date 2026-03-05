@@ -1,21 +1,23 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
-import type { ChatMessage, ToolRun, StreamEvent } from "@/types/chat";
+import type { ChatMessage, ToolRun, StreamEvent, RenderArtifact } from "@/types/chat";
 import { EmptyState } from "@/components/chat-v2/empty-state";
 import { MessageList } from "@/components/chat-v2/message-list";
 import { Composer } from "@/components/chat-v2/composer";
 import { ThinkingIndicator } from "@/components/chat-v2/thinking-indicator";
-import { useSessionId } from "@/hooks/use-session-id";
+import { useSessionId, generateId } from "@/hooks/use-session-id";
 import { DevSessionBadge } from "@/components/dev-session-badge";
 import styles from "./chat-v2.module.css";
 
 const STORAGE_KEY = "smallworld-chat-v2-history";
+const ARTIFACTS_STORAGE_KEY = "smallworld-chat-v2-artifacts";
 
 type Phase = "empty" | "thinking" | "conversation";
 
 export default function ChatV2Page() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [artifacts, setArtifacts] = useState<RenderArtifact[]>([]);
   const [phase, setPhase] = useState<Phase>("empty");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +62,7 @@ export default function ChatV2Page() {
     };
   }, []);
 
-  // Load messages from localStorage on mount
+  // Load messages and artifacts from localStorage on mount
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -69,6 +71,13 @@ export default function ChatV2Page() {
         if (parsed.length > 0) {
           setMessages(parsed);
           setPhase("conversation");
+        }
+      }
+      const storedArtifacts = localStorage.getItem(ARTIFACTS_STORAGE_KEY);
+      if (storedArtifacts) {
+        const parsed = JSON.parse(storedArtifacts) as RenderArtifact[];
+        if (parsed.length > 0) {
+          setArtifacts(parsed);
         }
       }
     } catch {
@@ -87,18 +96,31 @@ export default function ChatV2Page() {
     }
   }, [messages]);
 
+  // Save artifacts to localStorage whenever they change
+  useEffect(() => {
+    try {
+      if (artifacts.length > 0) {
+        localStorage.setItem(ARTIFACTS_STORAGE_KEY, JSON.stringify(artifacts));
+      } else {
+        localStorage.removeItem(ARTIFACTS_STORAGE_KEY);
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, [artifacts]);
+
   const handleSend = useCallback(
     async (text: string) => {
       if (isLoading) return;
 
       const userMessage: ChatMessage = {
-        id: crypto.randomUUID(),
+        id: generateId(),
         role: "user",
         content: text,
         timestamp: Date.now(),
       };
 
-      const assistantId = crypto.randomUUID();
+      const assistantId = generateId();
       const pendingAssistant: ChatMessage = {
         id: assistantId,
         role: "assistant",
@@ -124,7 +146,11 @@ export default function ChatV2Page() {
             "Content-Type": "application/json",
             "X-Session-Id": sessionId,
           },
-          body: JSON.stringify({ messages: updatedMessages, stream: true }),
+          body: JSON.stringify({
+            messages: updatedMessages,
+            stream: true,
+            artifacts: artifacts.length > 0 ? artifacts : undefined,
+          }),
         });
 
         if (!res.ok || !res.body) {
@@ -219,6 +245,9 @@ export default function ChatV2Page() {
                       : m
                   )
                 );
+                if (event.artifacts && event.artifacts.length > 0) {
+                  setArtifacts(event.artifacts);
+                }
                 setPhase("conversation");
                 break;
 
@@ -255,16 +284,18 @@ export default function ChatV2Page() {
         }
       }
     },
-    [isLoading, messages, sessionId]
+    [isLoading, messages, artifacts, sessionId]
   );
 
   const handleNewChat = useCallback(() => {
     setMessages([]);
+    setArtifacts([]);
     setPhase("empty");
     setError(null);
     resetSessionId();
     try {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(ARTIFACTS_STORAGE_KEY);
     } catch {
       // Ignore storage errors
     }

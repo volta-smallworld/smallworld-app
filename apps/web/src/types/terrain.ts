@@ -14,6 +14,18 @@ export interface ElevationGridRequest {
   radiusMeters: number;
 }
 
+// ── Fidelity metadata ────────────────────────────────────────────────────────
+
+export interface Fidelity {
+  demProvider?: string;
+  zoomRequested?: number;
+  zoomUsed?: number;
+  gridWidth?: number;
+  gridHeight?: number;
+  resampleMethod?: string;
+  tileCount?: number;
+}
+
 export interface ElevationGridResponse {
   request: {
     center: LatLng;
@@ -39,6 +51,7 @@ export interface ElevationGridResponse {
     meanElevation: number;
   };
   source: string;
+  fidelity?: Fidelity;
 }
 
 export type TerrainFetchState = "idle" | "loading" | "success" | "error";
@@ -139,6 +152,7 @@ export interface TerrainAnalysisResponse {
   scenes: SceneSeed[];
   tiles: { z: number; x: number; y: number }[];
   source: string;
+  fidelity?: Fidelity;
 }
 
 export type AnalysisOverlayKey =
@@ -234,6 +248,7 @@ export interface ViewpointSearchResponse {
   summary: ViewpointSearchSummary;
   viewpoints: RankedViewpoint[];
   source: string;
+  fidelity?: Fidelity;
 }
 
 // === Hour Four: Preview Types ===
@@ -242,7 +257,7 @@ export type ViewpointPreviewStatus = "idle" | "loading" | "ready" | "error" | "u
 
 export interface PreviewCapability {
   enabled: boolean;
-  provider: "ionTerrain" | "none";
+  provider: "ionTerrain" | "google3d" | "none";
   eagerCount: number;
   message: string | null;
 }
@@ -366,6 +381,7 @@ export interface StyleViewpointSearchResponse {
   summary: StyleViewpointSearchSummary;
   viewpoints: StyleRankedViewpoint[];
   source: string;
+  fidelity?: Fidelity;
 }
 
 export interface StyleVerificationResult {

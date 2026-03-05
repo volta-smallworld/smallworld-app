@@ -1,0 +1,50 @@
+# Dependencies & build artifacts
+node_modules/
+.next/
+.venv/
+__pycache__/
+*.pyc
+
+# Dev files
+.logs/
+.preview_artifacts/
+.style_artifacts/
+.env
+.env.local
+
+# Git & IDE
+.git/
+.gitignore
+*.md
+.vscode/
+.idea/
+
+# Test & CI
+.pytest_cache/
+coverage/
+.nyc_output/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs (not needed in image)
+ai/
+docs/
+
+# Web app (only need render-preview.mjs, not the full Next.js app)
+apps/web/src/
+apps/web/public/
+apps/web/.next/
+apps/web/node_modules/
+apps/web/package.json
+apps/web/pnpm-lock.yaml
+apps/web/tsconfig.json
+apps/web/next.config.mjs
+apps/web/tailwind.config.ts
+apps/web/postcss.config.mjs
+apps/web/components.json
+apps/web/apps/
+
+# Keep: apps/web/scripts/render-preview.mjs (via !exclude)
+!apps/web/scripts/

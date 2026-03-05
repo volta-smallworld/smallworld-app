@@ -6,9 +6,7 @@ import {
   ViewpointSearchRequest,
   ViewpointSearchResponse,
 } from "@/types/terrain";
-
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
+import { API_BASE_URL } from "@/lib/server/urls";
 const API_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_API_TIMEOUT_MS || "45000");
 
 function isAbortError(err: unknown): boolean {

@@ -11,19 +11,22 @@ from smallworld_api.services.tiles import GeoBounds
 @patch("smallworld_api.services.terrarium.crop_and_resample", return_value=np.zeros((GRID_SIZE, GRID_SIZE)))
 @patch("smallworld_api.services.terrarium.fetch_and_stitch", new_callable=AsyncMock)
 async def test_fetch_dem_snapshot_reduces_zoom_to_fit_tile_cap(mock_fetch_and_stitch, _mock_crop):
+    from smallworld_api.config import settings
+
     mock_fetch_and_stitch.return_value = (
         np.zeros((256, 256)),
         GeoBounds(north=46.0, south=45.0, east=-122.0, west=-123.0),
     )
 
+    # Use zoom 14 with 25km radius — guaranteed to exceed the 64-tile cap
     snap = await fetch_dem_snapshot(
         lat=45.52,
         lng=-122.67,
         radius_m=25000,
-        zoom=12,
+        zoom=14,
     )
 
     tile_range = mock_fetch_and_stitch.await_args.args[1]
-    assert snap.zoom < 12
-    assert tile_range.tile_count <= 36
+    assert snap.zoom < 14
+    assert tile_range.tile_count <= settings.max_tiles_per_request
 

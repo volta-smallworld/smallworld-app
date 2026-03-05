@@ -6,6 +6,7 @@ import json
 import logging
 from pathlib import Path
 
+import httpx
 from fastmcp.tools.tool import ToolResult
 from fastmcp.utilities.types import Image as McpImage
 
@@ -84,6 +85,16 @@ async def preview_render_pose(
             for idx, a in enumerate(comp.anchors)
         ]
 
+    # ── Delegation mode: POST to API service when api_internal_url is set ──
+    if settings.api_internal_url:
+        return await _delegate_to_api(
+            cam=cam, sc=sc, comp=comp, vp=vp, enh=enh,
+            rest_template=rest_template,
+            anchors_dicts=anchors_dicts,
+            include_images=include_images,
+        )
+
+    # ── Local mode: call render pipeline in-process ──
     try:
         result = await render_preview_pipeline(
             camera_lat=cam.position.lat,
@@ -119,7 +130,153 @@ async def preview_render_pose(
     except RenderError as e:
         raise RuntimeError(f"Preview render failed: {e}")
 
-    # Build artifact refs with optional public URLs
+    return _build_output(result, include_images)
+
+
+async def _delegate_to_api(
+    *,
+    cam: McpCameraPose,
+    sc: McpPreviewScene,
+    comp: McpPreviewComposition,
+    vp: McpViewportSpec,
+    enh: McpEnhancementOptions,
+    rest_template: str,
+    anchors_dicts: list[dict] | None,
+    include_images: bool,
+) -> dict | ToolResult:
+    """Delegate preview rendering to the API service via HTTP."""
+    # Build REST-compatible anchors (camelCase)
+    rest_anchors = None
+    if anchors_dicts:
+        rest_anchors = [
+            {
+                "id": a["id"],
+                "label": a.get("label"),
+                "lat": a["lat"],
+                "lng": a["lng"],
+                "altMeters": a.get("alt_meters", 0),
+                "desiredNormalizedX": a.get("desired_normalized_x", 0.5),
+                "desiredNormalizedY": a.get("desired_normalized_y", 0.5),
+            }
+            for a in anchors_dicts
+        ]
+
+    payload = {
+        "camera": {
+            "position": {
+                "lat": cam.position.lat,
+                "lng": cam.position.lng,
+                "altMeters": cam.position.alt_meters,
+            },
+            "headingDeg": cam.heading_deg,
+            "pitchDeg": cam.pitch_deg,
+            "rollDeg": cam.roll_deg,
+            "fovDeg": cam.fov_deg,
+        },
+        "viewport": {"width": vp.width, "height": vp.height},
+        "scene": {
+            "center": sc.center,
+            "radiusMeters": sc.radius_meters,
+            "sceneId": sc.scene_id,
+            "sceneType": sc.scene_type,
+            "sceneSummary": sc.scene_summary,
+            "featureIds": sc.feature_ids,
+        },
+        "composition": {
+            "targetTemplate": rest_template,
+            "subjectLabel": comp.subject_label,
+            "horizonRatio": comp.horizon_ratio,
+            "anchors": rest_anchors,
+        },
+        "enhancement": {
+            "enabled": enh.enabled,
+            "prompt": enh.prompt,
+        },
+    }
+
+    url = f"{settings.api_internal_url.rstrip('/')}/api/v1/previews/render"
+    timeout = settings.preview_render_timeout_seconds + 30  # extra margin for delegation
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(url, json=payload)
+    except httpx.TimeoutException:
+        raise RuntimeError("Preview render timed out (API delegation). Try again or use a simpler scene.")
+    except httpx.ConnectError as e:
+        raise RuntimeError(f"Could not reach API service at {settings.api_internal_url}: {e}")
+
+    if resp.status_code >= 400:
+        detail = resp.text[:500]
+        raise RuntimeError(f"API preview render failed (HTTP {resp.status_code}): {detail}")
+
+    data = resp.json()
+    public_base = settings.preview_public_base_url
+
+    raw_ref = PreviewArtifactRef(
+        local_path="",
+        url=f"{public_base}{data['rawImage']['url']}" if public_base and data.get("rawImage") else None,
+        width=data["rawImage"]["width"] if data.get("rawImage") else 0,
+        height=data["rawImage"]["height"] if data.get("rawImage") else 0,
+    )
+
+    enhanced_ref = None
+    if data.get("enhancedImage"):
+        enhanced_ref = PreviewArtifactRef(
+            local_path="",
+            url=f"{public_base}{data['enhancedImage']['url']}" if public_base else None,
+            width=data["enhancedImage"]["width"],
+            height=data["enhancedImage"]["height"],
+        )
+
+    warnings = [
+        PreviewWarning(code=w["code"], message=w["message"])
+        for w in data.get("warnings", [])
+    ]
+
+    output = PreviewRenderPoseResult(
+        id=data["id"],
+        status=data["status"],
+        warnings=warnings,
+        raw_image=raw_ref,
+        enhanced_image=enhanced_ref,
+        metadata=data.get("metadata", {}),
+        timings_ms=data.get("timingsMs", {}),
+        manifest_path="",
+    )
+
+    # In delegation mode, include_images fetches from the API's artifact URL
+    if not include_images:
+        return output.model_dump()
+
+    output_payload = output.model_dump()
+    content_items: list = [json.dumps(output_payload, indent=2, default=str)]
+
+    if raw_ref.url:
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                img_resp = await client.get(f"{settings.api_internal_url.rstrip('/')}{data['rawImage']['url']}")
+                if img_resp.status_code == 200:
+                    content_items.append(McpImage(data=img_resp.content, format="png"))
+        except Exception:
+            logger.warning("Could not fetch raw image for inline display")
+
+    if enhanced_ref and enhanced_ref.url:
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                img_resp = await client.get(f"{settings.api_internal_url.rstrip('/')}{data['enhancedImage']['url']}")
+                if img_resp.status_code == 200:
+                    content_items.append(McpImage(data=img_resp.content, format="png"))
+        except Exception:
+            logger.warning("Could not fetch enhanced image for inline display")
+
+    return ToolResult(
+        content=content_items,
+        structured_content={"result": output_payload},
+    )
+
+
+def _build_output(result, include_images: bool) -> dict | ToolResult:
+    """Build MCP output from a local pipeline result."""
     public_base = settings.preview_public_base_url
 
     raw_ref = PreviewArtifactRef(
@@ -163,7 +320,6 @@ async def preview_render_pose(
     if not include_images:
         return output.model_dump()
 
-    # Build content blocks: JSON text + inline image(s)
     output_payload = output.model_dump()
     content_items: list = []
     content_items.append(json.dumps(output_payload, indent=2, default=str))
@@ -179,8 +335,6 @@ async def preview_render_pose(
             )
         )
 
-    # Return ToolResult with both content blocks and structured output
-    # so FastMCP output-schema validation passes.
     return ToolResult(
         content=content_items,
         structured_content={"result": output_payload},

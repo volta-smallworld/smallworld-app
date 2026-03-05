@@ -15,7 +15,8 @@ mcp = FastMCP(
         "preview rendering for landscape photography planning. "
         "Use terrain_analyze_area to understand terrain, "
         "terrain_find_viewpoints to discover camera poses, "
-        "and preview_render_pose to render a preview image."
+        "preview_render_pose to render a preview image, and "
+        "terrain_point_context for precise ground elevation and camera safety checks."
     ),
 )
 
@@ -23,4 +24,5 @@ mcp = FastMCP(
 import smallworld_api.mcp.tools_terrain  # noqa: F401, E402
 import smallworld_api.mcp.tools_viewpoints  # noqa: F401, E402
 import smallworld_api.mcp.tools_previews  # noqa: F401, E402
+import smallworld_api.mcp.tools_point_context  # noqa: F401, E402
 import smallworld_api.mcp.resources  # noqa: F401, E402

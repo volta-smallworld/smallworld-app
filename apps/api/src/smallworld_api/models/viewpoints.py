@@ -1,7 +1,7 @@
 from __future__ import annotations
 from enum import Enum
 from pydantic import BaseModel, Field, model_validator
-from smallworld_api.models.terrain import LatLng, AnalysisWeights
+from smallworld_api.models.terrain import FidelityInfo, LatLng, AnalysisWeights
 
 class CompositionType(str, Enum):
     ruleOfThirds = "ruleOfThirds"
@@ -87,3 +87,4 @@ class ViewpointSearchResponse(BaseModel):
     summary: ViewpointSearchSummary
     viewpoints: list[RankedViewpoint]
     source: str = "aws-terrarium"
+    fidelity: FidelityInfo | None = None

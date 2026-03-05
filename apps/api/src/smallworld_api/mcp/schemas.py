@@ -230,6 +230,20 @@ class PreviewRenderPoseInput(BaseModel):
     include_images: bool = Field(default=False, description="Include inline image data in response")
 
 
+# ── Terrain Point Context ────────────────────────────────────────────────
+
+
+class TerrainPointContextInput(BaseModel):
+    lat: float = Field(ge=-90, le=90, description="Latitude of the point")
+    lng: float = Field(ge=-180, le=180, description="Longitude of the point")
+    camera_altitude_meters: float | None = Field(default=None, description="Optional camera altitude to compute AGL")
+    context_radius_meters: float = Field(default=2000, ge=500, le=10000, description="Radius for local terrain context")
+    zoom: int | None = Field(default=None, ge=1, le=18, description="Tile zoom level override")
+
+
+# ── Preview Render Pose (continued) ─────────────────────────────────────
+
+
 class PreviewArtifactRef(BaseModel):
     local_path: str
     url: str | None = None
