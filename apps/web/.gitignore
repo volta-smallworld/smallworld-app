@@ -1,1 +1,4 @@
 .vercel
+# Cesium build artifacts (copied by webpack plugin)
+public/cesium/
+apps/
