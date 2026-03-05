@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { Suspense, useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useQueryStates, parseAsFloat, parseAsInteger } from "nuqs";
 import ControlPanel from "@/components/control-panel";
 import TerrainResultPanel from "@/components/terrain-result-panel";
@@ -59,6 +59,14 @@ const DEFAULT_OVERLAYS: Record<AnalysisOverlayKey, boolean> = {
 };
 
 export default function Home() {
+  return (
+    <Suspense>
+      <HomeInner />
+    </Suspense>
+  );
+}
+
+function HomeInner() {
   const [locationParams, setLocationParams] = useQueryStates(
     {
       lat: parseAsFloat,

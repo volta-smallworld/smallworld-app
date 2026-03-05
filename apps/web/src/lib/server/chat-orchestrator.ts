@@ -424,6 +424,7 @@ export async function orchestrateChatStream(
 
       // Execute each tool call
       for (const tc of toolCallsArray) {
+        if (tc.type !== "function") continue;
         const fnName = tc.function.name;
         let fnArgs: Record<string, unknown> = {};
         try {
