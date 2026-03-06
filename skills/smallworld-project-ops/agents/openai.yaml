@@ -1,0 +1,4 @@
+interface:
+  display_name: "Smallworld Project Ops"
+  short_description: "smallworld-app GitHub planning policy."
+  default_prompt: "Use $smallworld-project-ops to apply smallworld-app project conventions and synchronize GitHub issues, milestones, and project state."

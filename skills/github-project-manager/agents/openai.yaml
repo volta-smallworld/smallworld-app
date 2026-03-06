@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub Project Manager"
+  short_description: "Sync plans with GitHub Projects."
+  default_prompt: "Use $github-project-manager to convert this implementation plan into issues, milestones, labels, and synced project updates."
