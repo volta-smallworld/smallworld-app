@@ -65,6 +65,28 @@ cd apps/api && uv sync  # API dependencies
 
 Copy `.env.example` to `.env` and fill in API keys (Gemini for enhancement, Google Maps for 3D tiles). The terrain pipeline works without any keys — enhancement and 3D rendering are optional.
 
+## Agent Skills (Codex + Claude Code)
+
+This repo includes local skills under `skills/`:
+- `skills/github-project-manager`
+- `skills/smallworld-project-ops`
+
+Codex:
+- To make these appear in the Codex skill picker, install/symlink them into `~/.codex/skills`.
+- Example:
+
+```bash
+mkdir -p ~/.codex/skills
+ln -sfn /Users/taylordawson/code/src/github.com/volta-smallworld/smallworld-app/skills/smallworld-project-ops ~/.codex/skills/smallworld-project-ops
+ln -sfn /Users/taylordawson/code/src/github.com/volta-smallworld/smallworld-app/skills/github-project-manager ~/.codex/skills/github-project-manager
+```
+
+- Restart Codex after installing so the skills are re-indexed.
+
+Claude Code:
+- Use the repo-local skill docs directly (for example: `skills/smallworld-project-ops/SKILL.md`).
+- Claude Code does not require Codex global skill installation for repo-scoped instructions.
+
 ## Running locally
 
 Use the Makefile to manage all services:

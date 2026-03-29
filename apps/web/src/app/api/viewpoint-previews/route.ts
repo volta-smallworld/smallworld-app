@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getPreviewCapabilities } from "@/lib/server/preview-capabilities";
-import { renderPreview } from "@/lib/server/preview-renderer";
+// @deprecated renderPreview from "@/lib/server/preview-renderer" — use API delegation instead
 import { getCacheKey, getCachedPreview, setCachedPreview } from "@/lib/server/preview-cache";
+import { API_BASE_URL } from "@/lib/server/urls";
 
 export const runtime = "nodejs";
 
@@ -53,7 +54,19 @@ function validateCamera(camera: unknown): { valid: true; camera: CameraInput } |
   };
 }
 
+function logPreviewEvent(event: string, context: Record<string, unknown>) {
+  const entry = {
+    ts: new Date().toISOString(),
+    component: "viewpoint-previews",
+    event,
+    ...context,
+  };
+  process.stderr.write(JSON.stringify(entry) + "\n");
+}
+
 export async function POST(request: NextRequest) {
+  const startMs = Date.now();
+
   // Check capability
   const capabilities = getPreviewCapabilities();
   if (!capabilities.enabled) {
@@ -71,6 +84,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 422 });
   }
 
+  const viewpointId = typeof body.viewpointId === "string" ? body.viewpointId : undefined;
+
   // Validate
   const validation = validateCamera(body.camera);
   if (!validation.valid) {
@@ -81,38 +96,127 @@ export async function POST(request: NextRequest) {
   const RENDER_WIDTH = parseInt(process.env.PREVIEW_RENDER_WIDTH || "1280", 10);
   const RENDER_HEIGHT = parseInt(process.env.PREVIEW_RENDER_HEIGHT || "720", 10);
 
+  logPreviewEvent("request", { viewpointId, provider: capabilities.provider });
+
   // Check cache
   const cacheKey = getCacheKey(camera, RENDER_WIDTH, RENDER_HEIGHT, capabilities.provider);
   const cached = getCachedPreview(cacheKey);
   if (cached) {
+    logPreviewEvent("cache_hit", { viewpointId, durationMs: Date.now() - startMs });
     return new NextResponse(new Uint8Array(cached), {
       status: 200,
       headers: {
-        "Content-Type": "image/jpeg",
+        "Content-Type": "image/png",
         "X-Smallworld-Preview-Cache": "hit",
       },
     });
   }
 
-  // Render
+  // Delegate to API pipeline
   try {
-    const imageBuffer = await renderPreview(camera);
+    const renderRequest = {
+      camera: {
+        position: {
+          lat: camera.lat,
+          lng: camera.lng,
+          altMeters: camera.altitudeMeters,
+        },
+        headingDeg: camera.headingDegrees,
+        pitchDeg: camera.pitchDegrees,
+        rollDeg: camera.rollDegrees,
+        fovDeg: camera.fovDegrees,
+      },
+      viewport: { width: RENDER_WIDTH, height: RENDER_HEIGHT },
+      scene: {
+        center: { lat: camera.lat, lng: camera.lng },
+        radiusMeters: 5000,
+      },
+      composition: { targetTemplate: "custom" },
+      enhancement: { enabled: false },
+    };
+
+    const renderRes = await fetch(`${API_BASE_URL}/api/v1/previews/render`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(renderRequest),
+    });
+
+    if (!renderRes.ok) {
+      const errorData = await renderRes.json().catch(() => ({ detail: "Unknown API error" }));
+      const detail = errorData.detail || errorData.message || `API error ${renderRes.status}`;
+      logPreviewEvent("render_error", {
+        viewpointId,
+        status: renderRes.status,
+        detail,
+        durationMs: Date.now() - startMs,
+      });
+
+      // Map API error codes to appropriate responses
+      if (renderRes.status === 503) {
+        return NextResponse.json({ error: "Preview render backend unavailable", detail }, { status: 503 });
+      }
+      if (renderRes.status === 504) {
+        return NextResponse.json({ error: "Preview render timed out", detail }, { status: 504 });
+      }
+      if (renderRes.status === 502) {
+        return NextResponse.json({ error: "Preview render failed", detail }, { status: 502 });
+      }
+      return NextResponse.json({ error: "Preview render failed", detail }, { status: 502 });
+    }
+
+    const renderData = await renderRes.json();
+
+    // Fetch the raw artifact image from the API
+    if (!renderData.rawImage?.url) {
+      logPreviewEvent("render_error", {
+        viewpointId,
+        detail: "No rawImage URL in render response",
+        durationMs: Date.now() - startMs,
+      });
+      return NextResponse.json(
+        { error: "Preview render produced no image" },
+        { status: 502 }
+      );
+    }
+
+    const artifactRes = await fetch(`${API_BASE_URL}${renderData.rawImage.url}`);
+    if (!artifactRes.ok) {
+      logPreviewEvent("render_error", {
+        viewpointId,
+        detail: `Artifact fetch failed: ${artifactRes.status}`,
+        durationMs: Date.now() - startMs,
+      });
+      return NextResponse.json(
+        { error: "Failed to fetch preview artifact" },
+        { status: 502 }
+      );
+    }
+
+    const imageBuffer = Buffer.from(await artifactRes.arrayBuffer());
     setCachedPreview(cacheKey, imageBuffer);
+
+    logPreviewEvent("render_success", {
+      viewpointId,
+      provider: capabilities.provider,
+      durationMs: Date.now() - startMs,
+    });
 
     return new NextResponse(new Uint8Array(imageBuffer), {
       status: 200,
       headers: {
-        "Content-Type": "image/jpeg",
+        "Content-Type": "image/png",
         "X-Smallworld-Preview-Cache": "miss",
       },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    logPreviewEvent("render_error", {
+      viewpointId,
+      detail: message,
+      durationMs: Date.now() - startMs,
+    });
 
-    if (message.includes("timeout") || message.includes("Timeout")) {
-      return NextResponse.json({ error: "Preview render timed out", message }, { status: 504 });
-    }
-
-    return NextResponse.json({ error: "Preview render failed", message }, { status: 500 });
+    // Network errors -> 502 (API unreachable)
+    return NextResponse.json({ error: "Preview render failed", detail: message }, { status: 502 });
   }
 }

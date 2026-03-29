@@ -1,0 +1,62 @@
+{
+  "projectTitle": "smallworld-app Roadmap",
+  "milestone": {
+    "title": "2026-03 Terrain Reliability",
+    "dueOn": "2026-03-31T23:59:59Z",
+    "description": "Reliability hardening across API, MCP, and web integration paths."
+  },
+  "labels": [
+    {"name": "area/api", "color": "1D76DB", "description": "Backend API service work"},
+    {"name": "area/mcp", "color": "5319E7", "description": "MCP server and tool workflow work"},
+    {"name": "area/web", "color": "0969DA", "description": "Web frontend and UX work"},
+    {"name": "area/infra", "color": "8250DF", "description": "Deployment, CI, infra, and environment work"},
+    {"name": "area/data", "color": "0E8A16", "description": "Data, terrain processing, and scoring work"},
+    {"name": "type/feature", "color": "0E8A16", "description": "New capability"},
+    {"name": "type/bug", "color": "D73A4A", "description": "Defect fix"},
+    {"name": "type/chore", "color": "6F42C1", "description": "Maintenance and housekeeping"},
+    {"name": "type/docs", "color": "0075CA", "description": "Documentation updates"},
+    {"name": "type/research", "color": "A2EEEF", "description": "Investigation and prototypes"},
+    {"name": "priority/p0", "color": "B60205", "description": "Urgent"},
+    {"name": "priority/p1", "color": "D93F0B", "description": "High priority"},
+    {"name": "priority/p2", "color": "FBCA04", "description": "Normal priority"},
+    {"name": "priority/p3", "color": "0E8A16", "description": "Low priority"},
+    {"name": "status/blocked", "color": "E11D21", "description": "Blocked by dependency or risk"},
+    {"name": "status/needs-info", "color": "C2E0C6", "description": "Needs clarification before implementation"}
+  ],
+  "templates": {
+    "epic": ["## Goal", "## Scope", "## Non-Goals", "## Milestones", "## Risks", "## Acceptance Criteria", "## Dependencies"],
+    "feature": ["## Problem", "## Proposed Solution", "## API/UX Impact", "## Acceptance Criteria", "## Test Plan", "## Rollout Plan"],
+    "bug": ["## Observed Behavior", "## Expected Behavior", "## Reproduction Steps", "## Root Cause Hypothesis", "## Fix Plan", "## Verification"],
+    "docs": ["## Audience", "## Gap", "## Proposed Update", "## Reviewers", "## Completion Criteria"]
+  },
+  "issues": [
+    {
+      "key": "epic-terrain-reliability",
+      "type": "epic",
+      "title": "[Epic] Terrain Reliability Hardening",
+      "labels": ["type/feature", "area/api", "area/mcp", "area/web", "priority/p1"],
+      "body": "## Goal\nImprove reliability of terrain analysis and viewpoint generation across API, MCP, and web workflows.\n\n## Scope\nStability, determinism, and project workflow alignment.\n\n## Non-Goals\nMajor algorithmic redesign for this milestone.\n\n## Milestones\n2026-03 Terrain Reliability\n\n## Risks\nProvider limits and cross-service regressions.\n\n## Acceptance Criteria\nCore workflows execute without critical reliability regressions.\n\n## Dependencies\nAPI/MCP/web coordination and test coverage."
+    },
+    {
+      "key": "feature-project-sync-automation",
+      "type": "feature",
+      "title": "[Feature] Deterministic project sync workflow",
+      "labels": ["type/feature", "area/infra", "priority/p1"],
+      "body": "## Problem\nManual project updates are repetitive and inconsistent.\n\n## Proposed Solution\nUse project-plan.json + scripts/project-sync.sh for idempotent sync.\n\n## API/UX Impact\nNo user-facing API change.\n\n## Acceptance Criteria\nProject sync script can run in doctor/apply modes reliably.\n\n## Test Plan\nRun doctor mode locally and validate generated cache and planned actions.\n\n## Rollout Plan\nAdopt for all new project planning runs in this repo."
+    },
+    {
+      "key": "bug-project-field-cache-drift",
+      "type": "bug",
+      "title": "[Bug] Project field cache can drift after field changes",
+      "labels": ["type/bug", "area/infra", "priority/p2"],
+      "body": "## Observed Behavior\nProject field IDs are rediscovered ad hoc and may become inconsistent between runs.\n\n## Expected Behavior\nField IDs are cached and refreshed deterministically before updates.\n\n## Reproduction Steps\nRun planning updates multiple times with manual field changes between runs.\n\n## Root Cause Hypothesis\nNo canonical field cache refresh step.\n\n## Fix Plan\nRefresh field cache in script preflight and require cache presence for field edits.\n\n## Verification\nCheck .git/project-field-cache.json for required keys after each run."
+    },
+    {
+      "key": "docs-project-ops-policy",
+      "type": "docs",
+      "title": "[Docs] Project operations policy",
+      "labels": ["type/docs", "area/infra", "priority/p3"],
+      "body": "## Audience\nEngineers and agents managing GitHub planning operations.\n\n## Gap\nCurrent policy is spread across files and lacks deterministic runbook steps.\n\n## Proposed Update\nDocument templates, label colors, estimate heuristics, and verification checklist.\n\n## Reviewers\nMaintainers of planning workflows.\n\n## Completion Criteria\nPolicy docs and skill files reflect canonical process."
+    }
+  ]
+}

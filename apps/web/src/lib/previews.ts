@@ -24,7 +24,7 @@ export async function fetchViewpointPreview(
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ error: "Unknown error" }));
-    throw new Error(errorData.message || errorData.error || `Preview failed: ${res.status}`);
+    throw new Error(errorData.detail || errorData.message || errorData.error || `Preview failed: ${res.status}`);
   }
 
   return res.blob();

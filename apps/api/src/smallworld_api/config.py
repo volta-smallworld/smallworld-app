@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     ridge_default_distance_multiplier: float = 2.5
 
     # ── Preview rendering ─────────────────────────────────────────────────
+    preview_eager_count: int = 3
     preview_artifacts_dir: str = ".preview_artifacts"
     preview_artifact_ttl_hours: int = 24
     preview_renderer_base_url: str = "http://127.0.0.1:4182/render/preview"

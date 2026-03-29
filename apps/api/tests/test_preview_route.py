@@ -293,3 +293,37 @@ def test_render_backend_not_configured():
         assert resp.status_code == 503
     finally:
         settings.preview_renderer_base_url = original
+
+
+# ── Contract shape assertions (delegation layer depends on these) ────────
+
+
+def test_response_raw_image_has_url_and_dimensions():
+    patches = _patch_all()
+    _apply_patches(patches)
+    try:
+        resp = client.post("/api/v1/previews/render", json=VALID_REQUEST)
+        assert resp.status_code == 200
+        raw = resp.json()["rawImage"]
+        assert "url" in raw
+        assert "width" in raw
+        assert "height" in raw
+        assert raw["mimeType"] == "image/png"
+    finally:
+        _stop_patches(patches)
+
+
+def test_error_responses_use_detail_field():
+    """FastAPI HTTPException errors should have a 'detail' field."""
+    from smallworld_api.config import settings
+
+    original = settings.preview_renderer_base_url
+    settings.preview_renderer_base_url = ""
+    try:
+        resp = client.post("/api/v1/previews/render", json=VALID_REQUEST)
+        assert resp.status_code == 503
+        body = resp.json()
+        assert "detail" in body
+        assert isinstance(body["detail"], str)
+    finally:
+        settings.preview_renderer_base_url = original

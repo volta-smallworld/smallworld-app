@@ -172,3 +172,13 @@ class PreviewRenderResponse(BaseModel):
     enhancedImage: ImageArtifact | None = None
     metadata: PreviewMetadata
     timingsMs: TimingsMs
+
+
+class PreviewCapabilitiesResponse(BaseModel):
+    enabled: bool
+    availableProviders: list[str]
+    providerOrder: list[str]
+    activeProvider: str
+    eagerCount: int
+    message: str | None = None
+    rendererConfigured: bool
