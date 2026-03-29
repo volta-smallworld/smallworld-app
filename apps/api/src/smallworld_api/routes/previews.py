@@ -14,6 +14,7 @@ from smallworld_api.models.previews import (
     CompositionTarget,
     ImageArtifact,
     LocationMetadata,
+    PreviewCapabilitiesResponse,
     PreviewMetadata,
     PreviewRenderRequest,
     PreviewRenderResponse,
@@ -30,6 +31,36 @@ from smallworld_api.services.previews import (
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+PROVIDER_ORDER = ["google_3d", "ion", "osm"]
+
+
+@router.get("/capabilities", response_model=PreviewCapabilitiesResponse)
+async def get_capabilities():
+    available: list[str] = []
+    if settings.google_maps_api_key:
+        available.append("google_3d")
+    if settings.cesium_ion_token:
+        available.append("ion")
+    available.append("osm")
+
+    renderer_configured = bool(settings.preview_renderer_base_url)
+    enabled = renderer_configured
+    active_provider = available[0] if available else "osm"
+
+    message = None
+    if not renderer_configured:
+        message = "Preview renderer is not configured (PREVIEW_RENDERER_BASE_URL is empty)."
+
+    return PreviewCapabilitiesResponse(
+        enabled=enabled,
+        availableProviders=available,
+        providerOrder=PROVIDER_ORDER,
+        activeProvider=active_provider,
+        eagerCount=settings.preview_eager_count,
+        message=message,
+        rendererConfigured=renderer_configured,
+    )
 
 
 @router.post("/render", response_model=PreviewRenderResponse)

@@ -2,7 +2,7 @@
 
 > **Living document.** Update this file whenever a pipeline stage, service, API endpoint, MCP tool, or data flow is added, modified, or removed. This is the single source of truth for understanding how the AI pipeline works end-to-end.
 
-Last updated: 2026-03-01
+Last updated: 2026-03-06
 
 ---
 
@@ -165,6 +165,32 @@ Three independent defense layers, each using a different terrain source:
 
 **Viewport:** default 1536x1024
 
+### Web Delegation Flow (added 2026-03-06)
+
+The web app no longer renders previews locally. Instead, the Next.js route handler at `/api/viewpoint-previews` delegates to the API pipeline:
+
+```
+Browser POST /api/viewpoint-previews
+  -> Next.js route handler (thin proxy)
+    -> POST ${API_BASE_URL}/api/v1/previews/render
+    -> API pipeline (fallback, safety, render, verify)
+    -> GET ${API_BASE_URL}/api/v1/previews/{id}/artifacts/raw
+  <- Image bytes cached locally, returned to browser
+```
+
+**Type mapping (web -> API):**
+- `CameraInput.lat/lng/altitudeMeters` -> `CameraPoseInput.position.lat/lng/altMeters`
+- `CameraInput.headingDegrees` -> `CameraPoseInput.headingDeg`
+- `CameraInput.pitchDegrees` -> `CameraPoseInput.pitchDeg`
+- `CameraInput.rollDegrees` -> `CameraPoseInput.rollDeg`
+- `CameraInput.fovDegrees` -> `CameraPoseInput.fovDeg`
+
+**Capabilities:** Web `/api/viewpoint-previews/capabilities` proxies to `GET /api/v1/previews/capabilities` with local fallback. Provider names mapped: `google_3d` -> `google3d`, `ion` -> `ionTerrain`, `osm` -> `osm`.
+
+**Structured logging:** The web route emits JSON events to stderr: `request`, `cache_hit`, `render_success`, `render_error`.
+
+See [ADR 0010](../adr/0010-delegate-web-previews-to-api-pipeline.md).
+
 ---
 
 ## Stage 7: Enhancement (optional)
@@ -216,7 +242,8 @@ Three independent defense layers, each using a different terrain source:
 | POST | `/api/v1/terrain/analyze` | Terrain analysis with features, hotspots, scenes | — |
 | POST | `/api/v1/terrain/viewpoints` | Viewpoint generation | — |
 | POST | `/api/v1/terrain/point-context` | Precise ground elevation + local terrain context | [0009](../adr/0009-precise-point-elevation-and-agl-camera-safety.md) |
-| POST | `/api/v1/previews/render` | Preview rendering pipeline | [0008](../adr/0008-hour-four-preview-architecture.md) |
+| POST | `/api/v1/previews/render` | Preview rendering pipeline | [0008](../adr/0008-hour-four-preview-architecture.md), [0010](../adr/0010-delegate-web-previews-to-api-pipeline.md) |
+| GET | `/api/v1/previews/capabilities` | Preview provider capabilities | [0010](../adr/0010-delegate-web-previews-to-api-pipeline.md) |
 | GET | `/api/v1/previews/{id}/artifacts/{type}` | Serve preview artifacts | [0008](../adr/0008-hour-four-preview-architecture.md) |
 
 ---
@@ -355,3 +382,5 @@ Three independent defense layers, each using a different terrain source:
 | 2026-03-01 | Precise point elevation sampler | [0009](../adr/0009-precise-point-elevation-and-agl-camera-safety.md) | `tiles.py`, `terrarium.py` |
 | 2026-03-01 | Three-layer AGL camera safety | [0009](../adr/0009-precise-point-elevation-and-agl-camera-safety.md) | `camera_safety.py`, `style_matching.py`, `previews.py`, `preview_renderer.py`, `render-preview-inner.tsx` |
 | 2026-03-01 | Point context service + REST + MCP tool | [0009](../adr/0009-precise-point-elevation-and-agl-camera-safety.md) | `point_context.py`, `routes/terrain.py`, `mcp/tools_point_context.py` |
+| 2026-03-06 | Delegate web previews to API pipeline | [0010](../adr/0010-delegate-web-previews-to-api-pipeline.md) | `routes/previews.py`, `models/previews.py`, web `route.ts`, web `capabilities/route.ts` |
+| 2026-03-06 | Add `GET /capabilities` endpoint | [0010](../adr/0010-delegate-web-previews-to-api-pipeline.md) | `routes/previews.py`, `models/previews.py`, `config.py` |

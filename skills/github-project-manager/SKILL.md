@@ -17,9 +17,59 @@ Use one of these prompts:
 - `Use $github-project-manager to sync issue/PR/project status for this repo.`
 - `Use $github-project-manager to bootstrap GitHub Project tracking for this repo.`
 
-## Workflow
+## Run Order
 
-### -1) Preflight and remediation
+Follow this order for every run:
+1. Run local sync script first: `scripts/project-sync.sh --doctor --plan project-plan.json`.
+2. Run preflight and repo/project inference.
+3. Align labels, milestone, and issues idempotently.
+4. Ensure project membership and field values.
+5. Run verification checklist and return created/updated resources.
+
+## Shell-Safe Snippets (Bash + Zsh)
+
+Prefer newline-delimited loops (no shell arrays needed):
+
+```bash
+# bash
+while IFS= read -r label; do
+  gh label list --limit 200 --json name -q ".[] | select(.name == \"$label\") | .name"
+done <<'LABELS'
+type/feature
+priority/p1
+LABELS
+```
+
+```zsh
+# zsh
+while IFS= read -r label; do
+  gh label list --limit 200 --json name -q ".[] | select(.name == \"$label\") | .name"
+done <<'LABELS'
+type/feature
+priority/p1
+LABELS
+```
+
+If arrays are required, use explicit shell syntax:
+
+```bash
+# bash arrays
+labels=("type/feature" "priority/p1")
+for label in "${labels[@]}"; do
+  echo "$label"
+done
+```
+
+```zsh
+# zsh arrays
+typeset -a labels
+labels=("type/feature" "priority/p1")
+for label in $labels; do
+  echo "$label"
+done
+```
+
+## Preflight and Remediation
 
 Run preflight before inference:
 
@@ -35,24 +85,24 @@ If preflight fails, branch explicitly:
   - Refresh scopes: `gh auth refresh -h github.com -s read:project,project`
   - In non-interactive runs, stop and return precise auth remediation commands when device flow cannot be completed.
 - `gh repo view` fails with not found:
-  - Execute repo bootstrap (Step -0.5) if user intends this local repo to be tracked.
+  - Execute repo bootstrap if user intends this local repo to be tracked.
 - `gh repo view` fails due API/network:
   - Switch to planning-only mode: produce a command plan and do not attempt mutating GitHub operations.
 - `git remote -v` returns no `origin`:
-  - Treat repo inference as incomplete and run Step -0.5.
+  - Treat repo inference as incomplete and run repo bootstrap.
 
-### -0.5) Repo bootstrap (when repo/remote is missing)
+### Sandbox and Network Escalation
 
-Use this when there is no remote or the GitHub repo does not exist:
+When running in a sandboxed environment:
+- If a required `gh` command fails due network/DNS/auth sandboxing, re-run the same command with approval/escalation.
+- If writes outside the workspace are required (for example global skill install), request approval before retrying.
+- Do not continue with partial mutations after a failed mutating command; rerun the failed step first, then resume.
+
+## Repo Bootstrap (When Remote/Repo Is Missing)
 
 ```bash
 gh repo create <owner>/<repo> --private --source=. --remote=origin
 git push -u origin HEAD
-```
-
-Then verify:
-
-```bash
 gh repo view --json nameWithOwner,defaultBranchRef,isPrivate
 ```
 
@@ -60,156 +110,169 @@ Important:
 - Fresh repos can report `defaultBranchRef: null` until first successful push.
 - If `defaultBranchRef` remains null, push intended default branch (commonly `main`) and re-check.
 
-### 0) Infer repo and project by default
+## Strict Naming Conventions
 
-Apply this policy unless the user explicitly passes `owner/repo` or a project:
-- Infer repository from current working directory (`gh` defaults to the cwd repo).
-- Infer owner/repo from `gh repo view --json nameWithOwner`.
-- Infer project with deterministic fallback:
-  1. If exactly one open project exists for owner, use it.
-  2. Else if exactly one project title contains repo name, use it.
-  3. Else if a project title equals `Roadmap` or `<repo> Roadmap`, use it.
-  4. Else if no candidate exists, bootstrap a new project (see Step 3).
-  5. Else ask one concise question to disambiguate.
+Use deterministic names to avoid drift:
+- Milestones: `YYYY-MM <Theme>` (example: `2026-03 Terrain Reliability`)
+- Epic issues: `[Epic] <Outcome>`
+- Feature issues: `[Feature] <Capability>`
+- Bug issues: `[Bug] <Symptom>`
+- Docs issues: `[Docs] <Scope>`
+- Every generated issue body should include a stable plan marker:
+  - `<!-- plan-key: <stable-key> -->`
 
-Use these discovery commands:
+## Project Inference and Field ID Cache
 
-```bash
-gh repo view --json nameWithOwner
-gh project list --owner <owner> --limit 100 --format json
-```
+Infer repository from current working directory unless the user passes explicit `owner/repo`.
 
-Decision rule for no remote + no repo + ambiguous owner:
-- If owner cannot be inferred from auth context or user/org membership, ask one question: `Which owner should host <repo>?`
-- Do not create repository/project resources until owner is explicit.
+Discover project deterministically:
+1. If exactly one open project exists for owner, use it.
+2. Else if exactly one project title contains repo name, use it.
+3. Else if a project title equals `Roadmap` or `<repo> Roadmap`, use it.
+4. Else bootstrap a new project.
+5. Else ask one concise question.
 
-### 1) Baseline the repository workflow
-
-Run these first:
+Discover and cache field IDs after project selection:
 
 ```bash
-gh auth status -h github.com
-gh auth refresh -h github.com -s read:project,project
-gh repo view --json nameWithOwner,defaultBranchRef,isPrivate
-gh label list --limit 200
-gh issue list --limit 200
+# cache file location (repo-local)
+CACHE_FILE=.git/project-field-cache.json
+
+PROJECT_NUMBER=<project-number>
+OWNER=<owner>
+
+PROJECT_JSON=$(gh project view "$PROJECT_NUMBER" --owner "$OWNER" --format json)
+FIELDS_JSON=$(gh project field-list "$PROJECT_NUMBER" --owner "$OWNER" --format json)
+
+jq -n \
+  --arg owner "$OWNER" \
+  --argjson project "$PROJECT_JSON" \
+  --argjson fields "$FIELDS_JSON" \
+  '{
+    owner: $owner,
+    projectId: $project.id,
+    projectNumber: $project.number,
+    fields: {
+      status: ($fields.fields[] | select(.name=="Status") | .id),
+      estimate: ($fields.fields[] | select(.name=="Estimate") | .id),
+      priority: ($fields.fields[] | select(.name=="Priority") | .id),
+      targetDate: ($fields.fields[] | select(.name=="Target Date") | .id)
+    },
+    refreshedAt: now
+  }' > "$CACHE_FILE"
 ```
 
-Inspect existing project structures before creating anything:
+## Idempotent Helpers
+
+Use helper patterns to avoid duplicate resources.
+
+### ensure_label
 
 ```bash
-gh project list --owner "@me" --limit 100
+ensure_label() {
+  local name="$1" color="$2" desc="$3"
+  local exists
+  exists=$(gh label list --limit 200 --json name -q ".[] | select(.name == \"$name\") | .name")
+  if [ -n "$exists" ]; then
+    gh label edit "$name" --color "$color" --description "$desc"
+  else
+    gh label create "$name" --color "$color" --description "$desc"
+  fi
+}
 ```
 
-When a project exists, inspect it:
+### ensure_milestone
 
 ```bash
-gh project view <project-number> --owner <owner> --format json
-gh project field-list <project-number> --owner <owner> --format json
-gh project item-list <project-number> --owner <owner> --format json
+ensure_milestone() {
+  local owner="$1" repo="$2" title="$3" due_on="$4" desc="$5"
+  local number
+  number=$(gh api "repos/$owner/$repo/milestones?state=all&per_page=100" -q ".[] | select(.title==\"$title\") | .number" | head -n1)
+  if [ -n "$number" ]; then
+    gh api --method PATCH "repos/$owner/$repo/milestones/$number" -f due_on="$due_on" -f description="$desc" >/dev/null
+  else
+    gh api "repos/$owner/$repo/milestones" -f title="$title" -f due_on="$due_on" -f description="$desc" >/dev/null
+  fi
+}
 ```
 
-### 2) Convert the implementation plan to a work graph
-
-Map the plan to:
-- Milestones: major deliverables and target dates.
-- Issues: concrete implementation units with acceptance criteria.
-- Labels: stable taxonomy (`area/*`, `type/*`, `priority/*`, `status/*`).
-- Estimates: either `Estimate` number field in Projects or label-based sizing if no project.
-- Dependencies: use sub-issues and linked issues where useful.
-
-Create missing labels idempotently (create if missing, edit if existing):
+### ensure_issue
 
 ```bash
-gh label create "type/feature" --color 0E8A16 --description "New capability"
-gh label create "priority/p1" --color B60205 --description "High priority"
+ensure_issue() {
+  local title="$1" body="$2" milestone="$3"
+  shift 3
+  local labels=("$@")
+  local key
+  key=$(printf '%s\n' "$body" | sed -n 's/.*plan-key: \([^ ]*\).*/\1/p' | head -n1)
+
+  local existing
+  existing=$(gh issue list --state all --search "\"plan-key: $key\" in:body" --limit 1 --json number -q '.[0].number')
+
+  local label_args=()
+  local label
+  for label in "${labels[@]}"; do
+    label_args+=(--label "$label")
+  done
+
+  if [ -n "$existing" ] && [ "$existing" != "null" ]; then
+    gh issue edit "$existing" --title "$title" --body "$body" --milestone "$milestone" "${label_args[@]}" >/dev/null
+    echo "$existing"
+  else
+    gh issue create --title "$title" --body "$body" --milestone "$milestone" "${label_args[@]}" --json number -q '.number'
+  fi
+}
 ```
 
-Create a milestone via API (no first-class `gh milestone` command):
+## Canonical Item Lookup and Field Update
+
+Find project item by issue number:
 
 ```bash
-gh api repos/<owner>/<repo>/milestones \
-  -f title="Phase 1" \
-  -f due_on="2026-04-15T23:59:59Z" \
-  -f description="Core foundations"
+ISSUE_URL="https://github.com/$OWNER/$REPO/issues/$ISSUE_NUMBER"
+ITEM_ID=$(gh project item-list "$PROJECT_NUMBER" --owner "$OWNER" --format json \
+  | jq -r --arg url "$ISSUE_URL" '.items[] | select(.content.url==$url) | .id' \
+  | head -n1)
 ```
 
-Create an issue directly in project flow:
-
-```bash
-gh issue create \
-  --title "Implement route-level caching for search" \
-  --body "<acceptance criteria and test plan>" \
-  --label "type/feature" \
-  --label "priority/p1" \
-  --milestone "Phase 1" \
-  --project "Roadmap"
-```
-
-### 3) Create or align GitHub Project structure
-
-If no suitable project exists, bootstrap one:
-
-```bash
-gh project create --owner <owner> --title "<repo> Roadmap"
-gh project link <project-number> --owner <owner> --repo <owner>/<repo>
-```
-
-Then ensure minimum planning fields exist:
-
-```bash
-gh project field-create <project-number> --owner <owner> --name "Estimate" --data-type NUMBER
-gh project field-create <project-number> --owner <owner> --name "Priority" --data-type SINGLE_SELECT --single-select-options "P0,P1,P2,P3"
-gh project field-create <project-number> --owner <owner> --name "Target Date" --data-type DATE
-```
-
-Use built-in fields (`Status`, `Assignees`, `Labels`, `Milestone`, `Repository`, `Reviewers`) whenever possible before adding custom equivalents.
-Prefer creating default views in UI after bootstrap:
-- `Board` grouped by `Status`
-- `Roadmap` by `Target Date` or iteration
-- `Table` with `Estimate`, `Priority`, `Milestone`, `Assignees`
-
-### 4) Synchronize issue/PR/project state
-
-Link PRs to issues with closing keywords in PR body (`Fixes #123`) so merge updates issue state.
-
-Add existing issue/PR items to project when needed:
-
-```bash
-gh project item-add <project-number> --owner <owner> --url https://github.com/<owner>/<repo>/issues/<n>
-gh project item-add <project-number> --owner <owner> --url https://github.com/<owner>/<repo>/pull/<n>
-```
-
-Update project field values on items:
+Set field value (example: `Priority` single-select):
 
 ```bash
 gh project item-edit \
-  --id <item-id> \
-  --project-id <project-id> \
-  --field-id <field-id> \
-  --single-select-option-id <option-id>
+  --id "$ITEM_ID" \
+  --project-id "$PROJECT_ID" \
+  --field-id "$PRIORITY_FIELD_ID" \
+  --single-select-option-id "$P1_OPTION_ID"
 ```
 
-Prefer this synchronization policy:
-- New issue: set `Status=Backlog`, set `Estimate`, set milestone if known.
-- PR opened: move related item to `In Progress`.
-- PR merged and issue closed: move item to `Done`.
-- PR changes requested: move to `Blocked` or `Needs Revision`.
+## Bulk Issue Create From JSON
 
-### 5) Configure automation in layers
+Use `project-plan.json` to reduce repetitive CLI calls:
 
-Configure built-in project workflows first in the UI:
-- Item added to project
-- Item reopened
-- Item closed
-- Pull request merged
-- Pull request changes requested
+```bash
+jq -c '.issues[]' project-plan.json | while IFS= read -r issue; do
+  key=$(echo "$issue" | jq -r '.key')
+  title=$(echo "$issue" | jq -r '.title')
+  body=$(echo "$issue" | jq -r '.body')
+  milestone=$(echo "$issue" | jq -r '.milestone // empty')
 
-Use auto-add workflows from linked repositories for predictable intake.
+  # append stable marker for idempotent lookup
+  body_with_key="$body\n\n<!-- plan-key: $key -->"
 
-Add GitHub Actions only when needed for advanced rules or cross-repo sync (for example, field updates on `projects_v2_item` events).
+  cmd=(gh issue create --title "$title" --body "$body_with_key")
+  if [ -n "$milestone" ]; then
+    cmd+=(--milestone "$milestone")
+  fi
 
-### 6) Operate a planning cadence
+  echo "$issue" | jq -r '.labels[]?' | while IFS= read -r label; do
+    cmd+=(--label "$label")
+  done
+
+  "${cmd[@]}"
+done
+```
+
+## Planning Cadence
 
 For each new implementation plan:
 - Create or choose a milestone.
@@ -229,6 +292,7 @@ Do not consider the run complete until all applicable checks pass:
 - Default branch is initialized (`defaultBranchRef` is not null).
 - Project exists and is linked to target repository.
 - Required planning fields exist (`Estimate`, `Priority`, `Target Date`).
+- Project field IDs are cached in `.git/project-field-cache.json`.
 - Baseline labels are present and synchronized idempotently.
 - Plan issues exist with milestone/labels and project membership.
 

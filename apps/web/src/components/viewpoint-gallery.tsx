@@ -118,9 +118,27 @@ function PreviewRegion({
             background: "rgba(127, 29, 29, 0.4)",
           }}
         >
-          <span style={{ fontSize: 12, color: "#fca5a5", marginBottom: 8 }}>
+          <span style={{ fontSize: 12, color: "#fca5a5", marginBottom: 4 }}>
             Preview failed
           </span>
+          {state?.error && (
+            <span
+              style={{
+                fontSize: 10,
+                color: "#f87171",
+                opacity: 0.7,
+                marginBottom: 6,
+                maxWidth: "90%",
+                textAlign: "center",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+              title={state.error}
+            >
+              {state.error.length > 80 ? state.error.slice(0, 80) + "..." : state.error}
+            </span>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
